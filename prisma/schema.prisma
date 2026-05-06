@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
+  avatarUrl     String   @default("")
+  goal          String   @default("Get a job at a top tech company")
+  experienceLevel String @default("Beginner")
+  targetCompanies String  @default("[]")
+  leetcodeUsername String @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  moduleProgress     ModuleProgress[]
+  problemAttempts    ProblemAttempt[]
+  quizAttempts       QuizAttempt[]
+  dailyActivities    DailyActivity[]
+  aiChatMessages     AIChatMessage[]
+  leetcodeProfile    LeetCodeProfile?
+  studyPlan          StudyPlan?
+  curriculumTasks    CurriculumTask[]
+}
+
+model LeetCodeProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  username        String
+  totalSolved     Int      @default(0)
+  easySolved      Int      @default(0)
+  mediumSolved    Int      @default(0)
+  hardSolved      Int      @default(0)
+  ranking         Int      @default(0)
+  contestRating   Int      @default(0)
+  lastSynced      DateTime @default(now())
+
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AIChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  context   String   @default("")
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StudyPlan {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  planJson    String
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Module {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  description        String
+  overview           String
+  intuition          String
+  whenToUse          String
+  recognitionSignals String
+  commonMistakes     String
+  difficultyLevel    String   @default("Beginner")
+  orderIndex         Int
+  prerequisites      String   @default("[]")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  lessonContents   LessonContent[]
+  practiceProblems PracticeProblem[]
+  quizQuestions    QuizQuestion[]
+  moduleProgress   ModuleProgress[]
+}
+
+model LessonContent {
+  id          String   @id @default(cuid())
+  moduleId    String
+  title       String
+  contentType String
+  body        String
+  orderIndex  Int
+  createdAt   DateTime @default(now())
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model PracticeProblem {
+  id                String   @id @default(cuid())
+  moduleId          String
+  title             String
+  source            String
+  url               String   @default("")
+  difficulty        String
+  description       String
+  learningObjective String
+  hintLevelOne      String
+  hintLevelTwo      String
+  hintLevelThree    String
+  hintLevelFour     String
+  finalExplanation  String
+  companies         String   @default("[]")
+  orderIndex        Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  module   Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  attempts ProblemAttempt[]
+}
+
+model ProblemAttempt {
+  id                  String    @id @default(cuid())
+  userId              String
+  practiceProblemId   String
+  status              String    @default("NotStarted")
+  minutesSpent        Int       @default(0)
+  hintUsedLevel       Int       @default(0)
+  solvedIndependently Boolean   @default(false)
+  canExplainClearly   Boolean   @default(false)
+  confidenceScore     Int       @default(0)
+  mistakeType         String    @default("")
+  keyInsight          String    @default("")
+  notes               String    @default("")
+  revisitDate         DateTime?
+  lastReviewedAt      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem    PracticeProblem @relation(fields: [practiceProblemId], references: [id], onDelete: Cascade)
+  reviewLogs ReviewLog[]
+}
+
+model ReviewLog {
+  id                 String   @id @default(cuid())
+  problemAttemptId   String
+  reviewedAt         DateTime @default(now())
+  previousConfidence Int
+  newConfidence      Int
+  previousStatus     String
+  newStatus          String
+  notes              String   @default("")
+
+  attempt ProblemAttempt @relation(fields: [problemAttemptId], references: [id], onDelete: Cascade)
+}
+
+model QuizQuestion {
+  id              String   @id @default(cuid())
+  moduleId        String
+  questionType    String
+  prompt          String
+  explanation     String
+  difficultyLevel String   @default("Beginner")
+  orderIndex      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  module         Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  options        QuizOption[]
+  fillGapAnswers FillGapAnswer[]
+  attempts       QuizAttempt[]
+}
+
+model QuizOption {
+  id             String  @id @default(cuid())
+  quizQuestionId String
+  text           String
+  isCorrect      Boolean @default(false)
+
+  question QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+}
+
+model FillGapAnswer {
+  id             String @id @default(cuid())
+  quizQuestionId String
+  correctAnswer  String
+
+  question QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id             String   @id @default(cuid())
+  userId         String
+  quizQuestionId String
+  selectedAnswer String
+  isCorrect      Boolean
+  attemptMode    String   @default("Practice")
+  createdAt      DateTime @default(now())
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+}
+
+model ModuleProgress {
+  id                  String    @id @default(cuid())
+  userId              String
+  moduleId            String
+  theoryCompleted     Boolean   @default(false)
+  conceptScore        Float     @default(0)
+  quizScore           Float     @default(0)
+  practiceScore       Float     @default(0)
+  masteryScore        Float     @default(0)
+  confidenceAverage   Float     @default(0)
+  explanationScore    Float     @default(0)
+  hintDependencyScore Float     @default(0)
+  reviewDueDate       DateTime?
+  status              String    @default("NotStarted")
+  updatedAt           DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+}
+
+model DailyActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime @default(now())
+  problemsSolved Int      @default(0)
+  quizzesTaken   Int      @default(0)
+  minutesSpent   Int      @default(0)
+  modulesWorked  String   @default("[]")
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProblemVisualCache {
+  id             String   @id @default(cuid())
+  leetcodeNumber Int
+  problemTitle   String   @unique
+  visualJson     String
+  generatedAt    DateTime @default(now())
+}
+
+model CurriculumWeek {
+  id          String           @id @default(cuid())
+  weekNumber  Int              @unique
+  title       String
+  totalPoints Float            @default(0)
+  createdAt   DateTime         @default(now())
+
+  tasks CurriculumTask[]
+}
+
+model CurriculumTask {
+  id             String    @id @default(cuid())
+  weekId         String
+  userId         String
+  title          String
+  category       String    @default("Algorithms - core program")
+  points         Float     @default(1)
+  isCompleted    Boolean   @default(false)
+  completedAt    DateTime?
+  leetcodeNumber Int?
+  leetcodeUrl    String?
+  moduleSlug     String?
+  practiceProblemId String?
+  notes          String    @default("")
+  orderIndex     Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  week CurriculumWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
