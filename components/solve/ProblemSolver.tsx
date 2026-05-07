@@ -54,16 +54,53 @@ interface TFQuestion {
 type Question = MCQuestion | FillQuestion | TFQuestion;
 
 interface SolutionData {
-  approach: string;
+  approach?: string;
   keyInsight: string;
   timeComplexity: string;
   spaceComplexity: string;
   steps: string[];
 }
 
+interface BigOData {
+  time: string;
+  timeWhy: string;
+  space: string;
+  spaceWhy: string;
+  canOptimize: boolean;
+  optimizeNote: string;
+}
+
+interface BestApproachData {
+  name: string;
+  pattern: string;
+  why: string;
+  whenToUse: string;
+}
+
+interface OptimalSolutionData {
+  language: string;
+  code: string;
+  lines: string[];
+}
+
+interface AlternativeApproachData {
+  applicable: boolean;
+  name: string;
+  description: string;
+  timeComplexity: string;
+  spaceComplexity: string;
+  whenBetter: string;
+  code?: string;
+  tradeoff: string;
+}
+
 interface AiResponse {
   questions: Question[];
   solution: SolutionData;
+  bigO?: BigOData;
+  bestApproach?: BestApproachData;
+  optimalSolution?: OptimalSolutionData;
+  alternativeApproach?: AlternativeApproachData;
 }
 
 interface YoutubeLinkData {
@@ -590,6 +627,107 @@ export default function ProblemSolver({ userName }: Props) {
           correctAnswer={tf.answer ? "True" : "False"}
           explanation={tf.explanation}
         />
+
+        {/* ── Big O Analysis ─────────────────────────────────────── */}
+        {aiData.bigO && (
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <h3 className="font-bold text-white">Big O Notation</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/10 rounded-lg p-3">
+                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wide mb-1">Time</p>
+                <p className="text-xl font-black text-white font-mono">{aiData.bigO.time}</p>
+                <p className="text-xs text-slate-400 mt-1">{aiData.bigO.timeWhy}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-3">
+                <p className="text-xs font-bold text-purple-300 uppercase tracking-wide mb-1">Space</p>
+                <p className="text-xl font-black text-white font-mono">{aiData.bigO.space}</p>
+                <p className="text-xs text-slate-400 mt-1">{aiData.bigO.spaceWhy}</p>
+              </div>
+            </div>
+            {aiData.bigO.optimizeNote && (
+              <p className="text-xs text-slate-300 bg-white/5 rounded-lg px-3 py-2">
+                💡 {aiData.bigO.optimizeNote}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Best Approach ──────────────────────────────────────── */}
+        {aiData.bestApproach && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎯</span>
+              <h3 className="font-bold text-emerald-900">Best Approach</h3>
+              <span className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                {aiData.bestApproach.pattern}
+              </span>
+            </div>
+            <p className="font-semibold text-emerald-800 text-sm">{aiData.bestApproach.name}</p>
+            <p className="text-sm text-emerald-700">{aiData.bestApproach.why}</p>
+            <div className="bg-emerald-100 rounded-lg px-3 py-2">
+              <p className="text-xs text-emerald-600"><span className="font-bold">When to use:</span> {aiData.bestApproach.whenToUse}</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Optimal Solution ───────────────────────────────────── */}
+        {aiData.optimalSolution && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⚡</span>
+              <h3 className="font-bold text-slate-900">Optimal Solution</h3>
+              <span className="ml-auto bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-full">
+                {aiData.optimalSolution.language}
+              </span>
+            </div>
+            <pre className="bg-slate-950 text-green-400 rounded-xl p-4 text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap">
+              {aiData.optimalSolution.code}
+            </pre>
+            {aiData.optimalSolution.lines.length > 0 && (
+              <div className="space-y-1.5">
+                {aiData.optimalSolution.lines.map((line, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                    <span className="w-4 h-4 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] mt-0.5">{i + 1}</span>
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Alternative Approach (BFS / Binary Search / etc.) ─── */}
+        {aiData.alternativeApproach?.applicable && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔄</span>
+              <h3 className="font-bold text-amber-900">Alternative: {aiData.alternativeApproach.name}</h3>
+            </div>
+            <p className="text-sm text-amber-700">{aiData.alternativeApproach.description}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
+                <span className="font-bold text-amber-800">Time:</span>{" "}
+                <span className="text-amber-700 font-mono">{aiData.alternativeApproach.timeComplexity}</span>
+              </div>
+              <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
+                <span className="font-bold text-amber-800">Space:</span>{" "}
+                <span className="text-amber-700 font-mono">{aiData.alternativeApproach.spaceComplexity}</span>
+              </div>
+            </div>
+            {aiData.alternativeApproach.code && (
+              <pre className="bg-slate-950 text-yellow-300 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                {aiData.alternativeApproach.code}
+              </pre>
+            )}
+            <p className="text-xs text-amber-600 bg-amber-100 rounded-lg px-3 py-2">
+              <span className="font-bold">When better:</span> {aiData.alternativeApproach.whenBetter}
+            </p>
+            <p className="text-xs text-amber-500 italic">{aiData.alternativeApproach.tradeoff}</p>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-3">

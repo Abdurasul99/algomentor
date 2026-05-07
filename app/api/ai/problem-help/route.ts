@@ -28,56 +28,81 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prompt = `You are an algorithm mentor. A student is studying this LeetCode problem:
+    const prompt = `You are an expert algorithm mentor. A student is studying this LeetCode problem:
 
 TITLE: ${problemTitle}
 DESCRIPTION: ${problemDescription}
 
-Generate a JSON response with two parts:
+Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
 
-1. Three understanding questions to check if they understand the problem:
-   - question1: A multiple choice question about what the problem is asking
-   - question2: A fill-in-the-gap question about the key algorithm approach
-   - question3: A true/false question about an edge case
-
-2. A solution explanation for when they need help
-
-Return ONLY valid JSON:
 {
   "questions": [
     {
       "type": "MultipleChoice",
-      "question": "...",
+      "question": "Question about what the problem is asking",
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
       "correctIndex": 0,
-      "explanation": "Why this is correct..."
+      "explanation": "Why A is correct and others are wrong"
     },
     {
       "type": "FillInGap",
-      "question": "Complete the key step: ...",
-      "answer": "...",
-      "explanation": "..."
+      "question": "Complete the key step: [sentence with ___ for the missing word]",
+      "answer": "the missing word or short phrase",
+      "explanation": "Why this word completes the step correctly"
     },
     {
       "type": "TrueFalse",
-      "question": "True or False: ...",
-      "answer": false,
-      "explanation": "..."
+      "question": "True or False: [statement about an edge case]",
+      "answer": true,
+      "explanation": "Why this is true/false"
     }
   ],
   "solution": {
-    "approach": "Step-by-step approach in 4-5 clear bullet points as a single string",
-    "keyInsight": "The one key insight that makes this problem easy",
+    "keyInsight": "The single most important insight — one sentence that unlocks the problem",
+    "steps": ["Step 1: ...", "Step 2: ...", "Step 3: ...", "Step 4: ..."],
     "timeComplexity": "O(n)",
+    "spaceComplexity": "O(n)"
+  },
+  "bigO": {
+    "time": "O(n)",
+    "timeWhy": "We iterate through all n intervals exactly once",
+    "space": "O(n)",
+    "spaceWhy": "Result array can hold at most n intervals",
+    "canOptimize": false,
+    "optimizeNote": "Already optimal — linear scan is the best possible for this problem"
+  },
+  "bestApproach": {
+    "name": "Linear Scan / Greedy",
+    "pattern": "Interval Merging",
+    "why": "Since intervals are sorted, we can make greedy decisions: skip intervals before newInterval, merge overlapping ones, then append the rest",
+    "whenToUse": "Use this pattern when intervals are sorted and you need to insert/merge"
+  },
+  "optimalSolution": {
+    "language": "Python",
+    "code": "def insert(self, intervals, newInterval):\n    result = []\n    i = 0\n    n = len(intervals)\n    # Add all intervals that end before newInterval starts\n    while i < n and intervals[i][1] < newInterval[0]:\n        result.append(intervals[i])\n        i += 1\n    # Merge all overlapping intervals\n    while i < n and intervals[i][0] <= newInterval[1]:\n        newInterval[0] = min(newInterval[0], intervals[i][0])\n        newInterval[1] = max(newInterval[1], intervals[i][1])\n        i += 1\n    result.append(newInterval)\n    # Add remaining intervals\n    while i < n:\n        result.append(intervals[i])\n        i += 1\n    return result",
+    "lines": [
+      "result = [] — output list",
+      "First while: skip intervals ending before newInterval starts (no overlap)",
+      "Second while: merge overlapping intervals by expanding newInterval boundaries",
+      "result.append(newInterval) — add merged interval",
+      "Third while: append all remaining intervals unchanged"
+    ]
+  },
+  "alternativeApproach": {
+    "applicable": true,
+    "name": "Binary Search + Merge",
+    "description": "Use binary search to find insertion position, then merge overlapping neighbors",
+    "timeComplexity": "O(n) worst case due to shifting, O(log n) for the search only",
     "spaceComplexity": "O(n)",
-    "steps": ["Step 1: ...", "Step 2: ...", "Step 3: ...", "Step 4: ...", "Step 5: ..."]
+    "whenBetter": "Better when the array is very large and the new interval rarely overlaps — saves time on the search",
+    "code": "import bisect\ndef insert_bs(intervals, newInterval):\n    start = bisect.bisect_left([x[0] for x in intervals], newInterval[0])\n    # then merge from start-1 outward",
+    "tradeoff": "More complex to implement correctly. Linear scan is usually preferred in interviews"
   }
-}`;
+}
 
-    const raw = await aiComplete(
-      [{ role: "user", content: prompt }],
-      2000
-    );
+Rules: valid JSON only, no trailing commas, actual code in optimalSolution.code using \\n for newlines.`;
+
+    const raw = await aiComplete([{ role: "user", content: prompt }], 3000);
 
     const repaired = repairJson(raw);
 
@@ -85,10 +110,7 @@ Return ONLY valid JSON:
     try {
       parsed = JSON.parse(repaired);
     } catch {
-      return NextResponse.json(
-        { error: "AI returned invalid JSON", raw },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "AI returned invalid JSON", raw }, { status: 500 });
     }
 
     return NextResponse.json(parsed);
