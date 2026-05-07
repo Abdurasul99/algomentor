@@ -275,8 +275,8 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
               "Вставь полное описание задачи сюда — ограничения, примеры, всё..."
             )}
             disabled={stage !== "input"}
-            rows={12}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-60"
+            rows={18}
+            className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y min-h-[320px] disabled:opacity-60 leading-relaxed"
           />
         </div>
 
