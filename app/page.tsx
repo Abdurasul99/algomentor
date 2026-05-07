@@ -4,6 +4,7 @@ import { generateMentorRecommendations, computeInterviewReadiness } from "@/lib/
 import MentorPanel from "@/components/ui/MentorPanel";
 import ProgressBar from "@/components/ui/ProgressBar";
 import LeetcodeHistory from "@/components/dashboard/LeetcodeHistory";
+import LeetCodeConnect from "@/components/dashboard/LeetCodeConnect";
 import Link from "next/link";
 import {
   BookOpen, Clock, AlertCircle,
@@ -283,19 +284,7 @@ export default async function DashboardPage() {
             </div>
           </div>
         ) : (
-          <div className="mx-5 mb-5 rounded-xl px-5 py-4 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <svg width="20" height="20" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M36.7 36.2c-1.2 1.3-2.9 2-4.7 2H17.5c-1.8 0-3.5-.7-4.7-2L6.5 29.4c-1.2-1.3-1.2-3.3 0-4.6l6.3-6.8c1.2-1.3 2.9-2 4.7-2H32c1.8 0 3.5.7 4.7 2l6.3 6.8c1.2 1.3 1.2 3.3 0 4.6l-6.3 6.8z" fill="#FFA116" opacity="0.5"/>
-              <rect x="20" y="23" width="16" height="4" rx="2" fill="white" opacity="0.4"/>
-            </svg>
-            <div>
-              <p className="text-slate-400 text-sm font-medium">LeetCode not synced</p>
-              <p className="text-slate-600 text-xs">Go to Settings to connect your LeetCode account</p>
-            </div>
-            <Link href="/import" className="ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 transition-colors">
-              Connect →
-            </Link>
-          </div>
+          <LeetCodeConnect />
         )}
       </div>
 
