@@ -34,12 +34,14 @@ export default function MentorPanel({ recommendations, title = "Mentor Recommend
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-200" />
-          <h2 className="font-bold text-white text-sm">{title}</h2>
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+        <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
         </div>
-        <p className="text-indigo-200 text-xs mt-0.5">Personalized guidance based on your progress</p>
+        <div>
+          <h2 className="font-bold text-slate-800 text-sm">{title}</h2>
+          <p className="text-slate-400 text-xs">Personalized guidance based on your progress</p>
+        </div>
       </div>
       <div className="p-4 space-y-3">
         {recommendations.map((rec, i) => {
