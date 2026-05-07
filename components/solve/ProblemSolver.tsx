@@ -11,10 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { PatternVisualization } from "@/lib/visualizations";
 
-const VisualGeneratorClient = dynamic(
-  () => import("@/components/visual/VisualGeneratorClient"),
-  { ssr: false, loading: () => <div className="h-40 bg-slate-50 rounded-xl animate-pulse" /> }
-);
+// VisualGeneratorClient intentionally NOT loaded here — opens in /problems/[lcNumber] to avoid page crash
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Stage = "input" | "loading" | "questions" | "answered" | "solution";
@@ -117,8 +114,7 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
   const [videosLoading, setVideosLoading] = useState(false);
 
-  // Visual
-  const [showVisual, setShowVisual] = useState(false);
+  // Visual tab opens in new page — no local state needed
 
   const msgRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -171,7 +167,7 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
     setTfAnswer(null);
     setVideos([]);
     setActiveVideo(null);
-    setShowVisual(false);
+    // visual opens externally
 
     try {
       const res = await fetch("/api/ai/problem-help", {
@@ -204,7 +200,7 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
   function handleReset() {
     setStage("input"); setAiData(null); setShowAnswers(false); setShowAnalysis(false);
     setMcAnswer(null); setFillAnswer(""); setTfAnswer(null);
-    setVideos([]); setActiveVideo(null); setShowVisual(false);
+    setVideos([]); setActiveVideo(null); // visual opens externally
   }
 
   function allAnswered() {
@@ -652,45 +648,65 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
     </div>
   );
 
-  // Visual tab
+  // Visual tab — opens /problems/[lcNumber] in a new tab (avoids crashing the solve page)
   const visualContent = (
-    <div className="flex-1 overflow-y-auto p-5">
+    <div className="flex-1 overflow-y-auto p-5 flex flex-col items-center justify-center gap-6 py-8">
       {lcNumber ? (
-        !showVisual ? (
-          <div className="flex flex-col items-center justify-center h-full gap-5 py-8">
-            <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center">
-              <Eye className="w-8 h-8 text-purple-600" />
-            </div>
-            <div className="text-center">
-              <p className="font-bold text-slate-800">{t("Visual Step-by-Step Explanation", "Пошаговое визуальное объяснение")}</p>
-              <p className="text-sm text-slate-500 mt-1">
-                {t(`AI will generate a visualization for "${problemName}"`, `AI создаст визуализацию для "${problemName}"`)}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowVisual(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-purple-200"
+        <>
+          <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-2xl flex items-center justify-center shadow-sm">
+            <Eye className="w-10 h-10 text-purple-600" />
+          </div>
+          <div className="text-center space-y-2">
+            <p className="font-bold text-slate-900 text-lg">{t("Visual Step-by-Step Explanation", "Пошаговое визуальное объяснение")}</p>
+            <p className="text-sm text-slate-500 max-w-xs">
+              {t(
+                `AI generates a step-by-step animation for problem #${lcNumber}: "${problemName}"`,
+                `AI создаёт пошаговую анимацию для задачи #${lcNumber}: "${problemName}"`
+              )}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            {/* Open in new tab — most reliable */}
+            <a
+              href={`/problems/${lcNumber}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-purple-200 text-sm"
             >
               <Sparkles className="w-4 h-4" />
-              {t("Generate Visual Explanation", "Сгенерировать объяснение")}
-            </button>
+              {t("Open Visual Explanation", "Открыть визуализацию")}
+              <ExternalLink className="w-3.5 h-3.5 opacity-75" />
+            </a>
+            <p className="text-xs text-slate-400 text-center">
+              {t("Opens in a new tab with full interactive visualizer", "Открывается в новой вкладке с полным интерактивным визуализатором")}
+            </p>
           </div>
-        ) : (
-          <VisualGeneratorClient
-            lcNumber={lcNumber}
-            problemTitle={problemName}
-            initialVisualization={undefined}
-          />
-        )
+
+          {/* Preview info */}
+          <div className="w-full max-w-xs bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{t("What you'll see", "Что там будет")}</p>
+            {[
+              t("8-10 step-by-step algorithm execution", "8-10 шагов выполнения алгоритма"),
+              t("Colored array cells with pointers", "Цветные ячейки с указателями"),
+              t("Code with line highlights", "Код с подсветкой строк"),
+              t("Edge cases and key insights", "Edge cases и ключевые выводы"),
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                <span className="w-4 h-4 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-[9px] shrink-0">{i + 1}</span>
+                {item}
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
-        <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
-          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto">
             <Eye className="w-7 h-7 text-slate-400" />
           </div>
-          <p className="text-slate-500 text-sm text-center">
+          <p className="text-slate-500 text-sm max-w-xs">
             {t(
-              'Include the LeetCode number in the title (e.g. "57. Insert Interval") to generate a visual explanation.',
-              'Включи номер LeetCode в название (например "57. Insert Interval") для визуализации.'
+              'Add the LeetCode number to the title (e.g. "57. Insert Interval") to enable visual explanation.',
+              'Добавь номер LeetCode в название (например "57. Insert Interval") для визуализации.'
             )}
           </p>
         </div>
