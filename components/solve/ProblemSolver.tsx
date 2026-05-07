@@ -209,6 +209,8 @@ export default function ProblemSolver({ userName }: Props) {
   const [tfAnswer, setTfAnswer] = useState<boolean | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showVisual, setShowVisual] = useState(false);
+  // Analysis sections are locked until user clicks "Reveal Analysis"
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Loading message cycling
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -307,6 +309,7 @@ export default function ProblemSolver({ userName }: Props) {
     setAiData(null);
     setShowFeedback(false);
     setShowVisual(false);
+    setShowAnalysis(false);
     setMcAnswer(null);
     setFillAnswer("");
     setTfAnswer(null);
@@ -672,6 +675,28 @@ export default function ProblemSolver({ userName }: Props) {
           explanation={lang === "ru" && aiData.ru?.questions?.[2]?.explanation ? aiData.ru.questions[2].explanation : tf.explanation}
         />
 
+        {/* ── Unlock Analysis Gate ───────────────────────────────── */}
+        {!showAnalysis && (
+          <button
+            onClick={() => setShowAnalysis(true)}
+            className="w-full group border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl py-5 px-4 flex flex-col items-center gap-2 transition-all hover:bg-indigo-50/50"
+          >
+            <div className="w-10 h-10 bg-indigo-100 group-hover:bg-indigo-200 rounded-full flex items-center justify-center transition-all">
+              <span className="text-xl">🔓</span>
+            </div>
+            <p className="font-bold text-slate-800 text-sm">
+              {lang === "ru" ? "Открыть полный разбор" : "Reveal Full Analysis"}
+            </p>
+            <p className="text-xs text-slate-500 text-center">
+              {lang === "ru"
+                ? "Big O нотация · Лучший подход · Оптимальное решение · Альтернатива"
+                : "Big O · Best Approach · Optimal Solution · Alternative"}
+            </p>
+          </button>
+        )}
+        {showAnalysis && (
+          <div className="space-y-5" style={{ animation: "fadeInUp 0.4s ease-out" }}>
+
         {/* ── Big O Analysis ─────────────────────────────────────── */}
         {aiData.bigO && (
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 space-y-4">
@@ -791,6 +816,8 @@ export default function ProblemSolver({ userName }: Props) {
             <p className="text-xs text-amber-500 italic">
               {lang === "ru" && aiData.ru?.alternativeApproach?.tradeoff ? aiData.ru.alternativeApproach.tradeoff : aiData.alternativeApproach.tradeoff}
             </p>
+          </div>
+        )}
           </div>
         )}
 
