@@ -292,7 +292,7 @@ export default async function DashboardPage() {
               <p className="text-slate-400 text-sm font-medium">LeetCode not synced</p>
               <p className="text-slate-600 text-xs">Go to Settings to connect your LeetCode account</p>
             </div>
-            <Link href="/settings" className="ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 transition-colors">
+            <Link href="/import" className="ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 transition-colors">
               Connect →
             </Link>
           </div>
