@@ -66,12 +66,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Fetch all modules to initialize ModuleProgress
-    const modules = await prisma.module.findMany({
-      select: { id: true },
-    });
-
     // Initialize ModuleProgress for all modules
+    const modules = await prisma.module.findMany({ select: { id: true } });
     if (modules.length > 0) {
       for (const module of modules) {
         await prisma.moduleProgress.upsert({
@@ -80,6 +76,31 @@ export async function POST(req: NextRequest) {
           update: {},
         });
       }
+    }
+
+    // Copy curriculum tasks from template (any existing user's tasks serve as master template)
+    const templateTasks = await prisma.curriculumTask.findMany({
+      orderBy: { orderIndex: "asc" },
+      distinct: ["weekId", "orderIndex"],  // one copy per slot
+    });
+
+    if (templateTasks.length > 0) {
+      await prisma.curriculumTask.createMany({
+        data: templateTasks.map((t) => ({
+          weekId:            t.weekId,
+          userId:            user.id,
+          title:             t.title,
+          category:          t.category,
+          points:            t.points,
+          isCompleted:       false,
+          leetcodeNumber:    t.leetcodeNumber,
+          leetcodeUrl:       t.leetcodeUrl,
+          moduleSlug:        t.moduleSlug,
+          practiceProblemId: t.practiceProblemId,
+          notes:             "",
+          orderIndex:        t.orderIndex,
+        })),
+      });
     }
 
     return NextResponse.json(
