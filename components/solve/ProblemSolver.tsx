@@ -179,8 +179,19 @@ export default function ProblemSolver({ userName, leetcodeUsername }: { userName
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ problemTitle, problemDescription: problemDesc }),
       });
-      const data = await res.json() as AiResponse & { error?: string };
+
+      // Read as text first to handle HTML error pages
+      const rawText = await res.text();
+      let data: AiResponse & { error?: string };
+      try {
+        data = JSON.parse(rawText) as AiResponse & { error?: string };
+      } catch {
+        // Server returned HTML (crash) — show a clean error
+        throw new Error(`Server error (${res.status}). Please try again.`);
+      }
+
       if (!res.ok || data.error) throw new Error(data.error ?? "AI error");
+      if (!data.questions?.length) throw new Error("AI response was incomplete. Please try again.");
       setAiData(data);
       setStage("questions");
       setActiveTab("questions");

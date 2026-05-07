@@ -5,7 +5,51 @@ import { aiComplete } from "@/lib/ai";
 import { repairJson } from "@/lib/jsonRepair";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
+
+function buildPrompt(problemTitle: string, problemDescription: string, short = false): string {
+  // Truncate very long descriptions to prevent token overflow
+  const maxDescLen = short ? 800 : 1500;
+  const desc = problemDescription.length > maxDescLen
+    ? problemDescription.slice(0, maxDescLen) + "\n[...truncated]"
+    : problemDescription;
+
+  const stepsCount = short ? 3 : 4;
+
+  return `You are an algorithm mentor. Analyze this LeetCode problem and return ONLY valid JSON:
+
+TITLE: ${problemTitle}
+DESCRIPTION: ${desc}
+
+Return this exact JSON structure (no markdown, no extra text, strict JSON):
+{
+  "questions": [
+    {"type":"MultipleChoice","question":"What does this problem ask us to do?","options":["A. option1","B. option2","C. option3","D. option4"],"correctIndex":0,"explanation":"Brief explanation"},
+    {"type":"FillInGap","question":"Complete: The key insight is to use ___ to achieve O(log n)","answer":"binary search","explanation":"Brief explanation"},
+    {"type":"TrueFalse","question":"True or False: [edge case statement]","answer":true,"explanation":"Brief explanation"}
+  ],
+  "solution":{"keyInsight":"One sentence key insight","steps":["Step 1","Step 2","Step 3"],"timeComplexity":"O(n)","spaceComplexity":"O(1)"},
+  "bigO":{"time":"O(n)","timeWhy":"brief reason","space":"O(1)","spaceWhy":"brief reason","optimizeNote":"brief note"},
+  "bestApproach":{"name":"Approach Name","pattern":"Pattern","why":"brief why","whenToUse":"brief when"},
+  "optimalSolution":{"language":"Python","code":"def solution():\\n    pass","lines":["line explanation 1","line explanation 2"]},
+  "alternativeApproach":{"applicable":true,"name":"Alternative Name","description":"brief desc","timeComplexity":"O(n)","spaceComplexity":"O(n)","whenBetter":"brief","tradeoff":"brief"},
+  "ru":{"questions":[{"question":"Рус вопрос 1","options":["А. вариант1","Б. вариант2","В. вариант3","Г. вариант4"],"explanation":"Рус объяснение"},{"question":"Рус вопрос 2","answer":"рус ответ","explanation":"Рус объяснение"},{"question":"Верно или Неверно: рус утверждение","explanation":"Рус объяснение"}],"solution":{"keyInsight":"Рус инсайт","steps":["Шаг 1","Шаг 2","Шаг 3"]},"bigO":{"timeWhy":"рус причина","spaceWhy":"рус причина","optimizeNote":"рус заметка"},"bestApproach":{"name":"Рус название","why":"рус почему","whenToUse":"рус когда"},"optimalSolution":{"lines":["рус объяснение 1","рус объяснение 2"]},"alternativeApproach":{"description":"рус описание","whenBetter":"рус когда лучше","tradeoff":"рус компромисс"}}
+}
+
+CRITICAL: Output ONLY the JSON. No markdown. No extra text. Keep ALL string values SHORT (under 120 chars each). Valid JSON only.`;
+}
+
+async function tryParse(raw: string): Promise<unknown | null> {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    try {
+      return JSON.parse(repairJson(raw));
+    } catch {
+      return null;
+    }
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,150 +58,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json()) as {
-      problemTitle?: string;
-      problemDescription?: string;
-    };
+    const body = (await req.json()) as { problemTitle?: string; problemDescription?: string };
+    const { problemTitle = "", problemDescription = "" } = body;
 
-    const { problemTitle, problemDescription } = body;
-
-    if (!problemTitle?.trim() || !problemDescription?.trim()) {
-      return NextResponse.json(
-        { error: "problemTitle and problemDescription are required" },
-        { status: 400 }
-      );
+    if (!problemTitle.trim() || !problemDescription.trim()) {
+      return NextResponse.json({ error: "problemTitle and problemDescription are required" }, { status: 400 });
     }
 
-    const prompt = `You are an expert algorithm mentor. A student is studying this LeetCode problem:
-
-TITLE: ${problemTitle}
-DESCRIPTION: ${problemDescription}
-
-Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
-
-{
-  "questions": [
-    {
-      "type": "MultipleChoice",
-      "question": "Question about what the problem is asking",
-      "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-      "correctIndex": 0,
-      "explanation": "Why A is correct and others are wrong"
-    },
-    {
-      "type": "FillInGap",
-      "question": "Complete the key step: [sentence with ___ for the missing word]",
-      "answer": "the missing word or short phrase",
-      "explanation": "Why this word completes the step correctly"
-    },
-    {
-      "type": "TrueFalse",
-      "question": "True or False: [statement about an edge case]",
-      "answer": true,
-      "explanation": "Why this is true/false"
-    }
-  ],
-  "solution": {
-    "keyInsight": "The single most important insight — one sentence that unlocks the problem",
-    "steps": ["Step 1: ...", "Step 2: ...", "Step 3: ...", "Step 4: ..."],
-    "timeComplexity": "O(n)",
-    "spaceComplexity": "O(n)"
-  },
-  "bigO": {
-    "time": "O(n)",
-    "timeWhy": "We iterate through all n intervals exactly once",
-    "space": "O(n)",
-    "spaceWhy": "Result array can hold at most n intervals",
-    "canOptimize": false,
-    "optimizeNote": "Already optimal — linear scan is the best possible for this problem"
-  },
-  "bestApproach": {
-    "name": "Linear Scan / Greedy",
-    "pattern": "Interval Merging",
-    "why": "Since intervals are sorted, we can make greedy decisions: skip intervals before newInterval, merge overlapping ones, then append the rest",
-    "whenToUse": "Use this pattern when intervals are sorted and you need to insert/merge"
-  },
-  "optimalSolution": {
-    "language": "Python",
-    "code": "def insert(self, intervals, newInterval):\n    result = []\n    i = 0\n    n = len(intervals)\n    # Add all intervals that end before newInterval starts\n    while i < n and intervals[i][1] < newInterval[0]:\n        result.append(intervals[i])\n        i += 1\n    # Merge all overlapping intervals\n    while i < n and intervals[i][0] <= newInterval[1]:\n        newInterval[0] = min(newInterval[0], intervals[i][0])\n        newInterval[1] = max(newInterval[1], intervals[i][1])\n        i += 1\n    result.append(newInterval)\n    # Add remaining intervals\n    while i < n:\n        result.append(intervals[i])\n        i += 1\n    return result",
-    "lines": [
-      "result = [] — output list",
-      "First while: skip intervals ending before newInterval starts (no overlap)",
-      "Second while: merge overlapping intervals by expanding newInterval boundaries",
-      "result.append(newInterval) — add merged interval",
-      "Third while: append all remaining intervals unchanged"
-    ]
-  },
-  "alternativeApproach": {
-    "applicable": true,
-    "name": "Binary Search + Merge",
-    "description": "Use binary search to find insertion position, then merge overlapping neighbors",
-    "timeComplexity": "O(n) worst case due to shifting, O(log n) for the search only",
-    "spaceComplexity": "O(n)",
-    "whenBetter": "Better when the array is very large and the new interval rarely overlaps — saves time on the search",
-    "code": "import bisect\ndef insert_bs(intervals, newInterval):\n    start = bisect.bisect_left([x[0] for x in intervals], newInterval[0])\n    # then merge from start-1 outward",
-    "tradeoff": "More complex to implement correctly. Linear scan is usually preferred in interviews"
-  }
-}
-
-Rules: valid JSON only, no trailing commas, actual code in optimalSolution.code using \\n for newlines.
-
-IMPORTANT: After the main JSON, also add a "ru" field with Russian translations of all user-visible text:
-"ru": {
-  "questions": [
-    {
-      "question": "Russian translation of question 1",
-      "options": ["А. ...", "Б. ...", "В. ...", "Г. ..."],
-      "explanation": "Russian explanation"
-    },
-    {
-      "question": "Russian translation of fill-in-gap question",
-      "answer": "Russian answer",
-      "explanation": "Russian explanation"
-    },
-    {
-      "question": "Russian translation of true/false question",
-      "explanation": "Russian explanation"
-    }
-  ],
-  "solution": {
-    "keyInsight": "Russian key insight",
-    "steps": ["Шаг 1: ...", "Шаг 2: ...", "Шаг 3: ...", "Шаг 4: ..."]
-  },
-  "bigO": {
-    "timeWhy": "Russian explanation of time complexity",
-    "spaceWhy": "Russian explanation of space complexity",
-    "optimizeNote": "Russian optimization note"
-  },
-  "bestApproach": {
-    "name": "Russian approach name",
-    "why": "Russian explanation",
-    "whenToUse": "Russian when-to-use"
-  },
-  "optimalSolution": {
-    "lines": ["Russian line 1 explanation", "Russian line 2 explanation", "..."]
-  },
-  "alternativeApproach": {
-    "description": "Russian description",
-    "whenBetter": "Russian when-better",
-    "tradeoff": "Russian tradeoff"
-  }
-}`;
-
-    const raw = await aiComplete([{ role: "user", content: prompt }], 4500);
-
-    const repaired = repairJson(raw);
-
-    let parsed: unknown;
+    // Attempt 1: full prompt
+    let raw = "";
     try {
-      parsed = JSON.parse(repaired);
-    } catch {
-      return NextResponse.json({ error: "AI returned invalid JSON", raw }, { status: 500 });
+      raw = await aiComplete([{ role: "user", content: buildPrompt(problemTitle, problemDescription) }], 4000);
+    } catch (e) {
+      console.error("[problem-help] AI call 1 failed:", e);
+    }
+
+    let parsed = await tryParse(raw);
+
+    // Attempt 2: shorter prompt if first failed
+    if (!parsed || !(parsed as Record<string, unknown>).questions) {
+      console.warn("[problem-help] attempt 1 failed, retrying with shorter prompt");
+      try {
+        raw = await aiComplete([{ role: "user", content: buildPrompt(problemTitle, problemDescription, true) }], 3000);
+        parsed = await tryParse(raw);
+      } catch (e) {
+        console.error("[problem-help] AI call 2 failed:", e);
+      }
+    }
+
+    if (!parsed || !(parsed as Record<string, unknown>).questions) {
+      console.error("[problem-help] Both attempts failed. Raw snippet:", raw?.slice(0, 300));
+      return NextResponse.json({ error: "AI could not generate questions for this problem. Please try again." }, { status: 500 });
     }
 
     return NextResponse.json(parsed);
   } catch (error) {
-    console.error("[ai/problem-help] error:", error);
+    console.error("[ai/problem-help] unhandled error:", error);
     const msg = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
