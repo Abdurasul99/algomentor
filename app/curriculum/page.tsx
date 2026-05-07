@@ -26,8 +26,43 @@ type WeekWithTasks = {
   tasks: CurriculumTaskRow[];
 };
 
+async function ensureUserTasks(userId: string) {
+  const count = await prisma.curriculumTask.count({ where: { userId } });
+  if (count > 0) return;
+
+  // Find any existing user's tasks as the template
+  const anyTask = await prisma.curriculumTask.findFirst();
+  if (!anyTask) return;
+
+  const template = await prisma.curriculumTask.findMany({
+    where: { userId: anyTask.userId },
+    orderBy: { orderIndex: "asc" },
+  });
+  if (template.length === 0) return;
+
+  await prisma.curriculumTask.createMany({
+    data: template.map((t) => ({
+      weekId:            t.weekId,
+      userId,
+      title:             t.title,
+      category:          t.category,
+      points:            t.points,
+      isCompleted:       false,
+      leetcodeNumber:    t.leetcodeNumber,
+      leetcodeUrl:       t.leetcodeUrl,
+      moduleSlug:        t.moduleSlug,
+      practiceProblemId: t.practiceProblemId,
+      notes:             "",
+      orderIndex:        t.orderIndex,
+    })),
+  });
+}
+
 export default async function CurriculumPage() {
   const user = await requireUser();
+
+  // Auto-create tasks for this user if they don't have any yet
+  await ensureUserTasks(user.id);
 
   const weeks = (await prisma.curriculumWeek.findMany({
     orderBy: { weekNumber: "asc" },
