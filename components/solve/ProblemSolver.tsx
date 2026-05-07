@@ -94,6 +94,21 @@ interface AlternativeApproachData {
   tradeoff: string;
 }
 
+// Russian translations structure
+interface RuTranslations {
+  questions?: Array<{
+    question?: string;
+    options?: string[];
+    answer?: string;
+    explanation?: string;
+  }>;
+  solution?: { keyInsight?: string; steps?: string[] };
+  bigO?: { timeWhy?: string; spaceWhy?: string; optimizeNote?: string };
+  bestApproach?: { name?: string; why?: string; whenToUse?: string };
+  optimalSolution?: { lines?: string[] };
+  alternativeApproach?: { description?: string; whenBetter?: string; tradeoff?: string };
+}
+
 interface AiResponse {
   questions: Question[];
   solution: SolutionData;
@@ -101,6 +116,7 @@ interface AiResponse {
   bestApproach?: BestApproachData;
   optimalSolution?: OptimalSolutionData;
   alternativeApproach?: AlternativeApproachData;
+  ru?: RuTranslations;
 }
 
 interface YoutubeLinkData {
@@ -177,6 +193,9 @@ export default function ProblemSolver({ userName }: Props) {
 
   // Stage state
   const [stage, setStage] = useState<Stage>("input");
+
+  // Language toggle — EN or RU
+  const [lang, setLang] = useState<"en" | "ru">("en");
 
   // AI data
   const [aiData, setAiData] = useState<AiResponse | null>(null);
@@ -474,20 +493,39 @@ export default function ProblemSolver({ userName }: Props) {
         <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
           <Brain className="w-5 h-5 text-amber-600" />
         </div>
-        <div>
-          <h2 className="font-bold text-slate-900">Do you understand this problem?</h2>
-          <p className="text-xs text-slate-500">Answer all 3 questions, then check your understanding</p>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-bold text-slate-900">
+            {lang === "ru" ? "Понимаешь эту задачу?" : "Do you understand this problem?"}
+          </h2>
+          <p className="text-xs text-slate-500">
+            {lang === "ru" ? "Ответь на 3 вопроса, потом проверь понимание" : "Answer all 3 questions, then check your understanding"}
+          </p>
         </div>
+        {/* Language toggle */}
+        <button
+          onClick={() => setLang(l => l === "en" ? "ru" : "en")}
+          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+            lang === "ru"
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-600"
+          }`}
+          title="Toggle language / Переключить язык"
+        >
+          {lang === "ru" ? "🇷🇺 РУС" : "🇬🇧 ENG"}
+        </button>
       </div>
 
       {/* Q1: Multiple Choice */}
       {(() => {
         const q = aiData.questions[0] as MCQuestion;
+        const ruQ = aiData.ru?.questions?.[0];
+        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
+        const displayOptions = lang === "ru" && ruQ?.options?.length ? ruQ.options : q.options;
         return (
-          <QuestionCard number={1} label="Multiple Choice">
-            <p className="text-sm font-medium text-slate-800 mb-3">{q.question}</p>
+          <QuestionCard number={1} label={lang === "ru" ? "Выбор ответа" : "Multiple Choice"}>
+            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
             <div className="space-y-2">
-              {q.options.map((opt, i) => (
+              {displayOptions.map((opt, i) => (
                 <button
                   key={i}
                   onClick={() => setMcAnswer(i)}
@@ -508,14 +546,16 @@ export default function ProblemSolver({ userName }: Props) {
       {/* Q2: Fill in the Gap */}
       {(() => {
         const q = aiData.questions[1] as FillQuestion;
+        const ruQ = aiData.ru?.questions?.[1];
+        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
         return (
-          <QuestionCard number={2} label="Fill in the Gap">
-            <p className="text-sm font-medium text-slate-800 mb-3">{q.question}</p>
+          <QuestionCard number={2} label={lang === "ru" ? "Заполни пропуск" : "Fill in the Gap"}>
+            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
             <input
               type="text"
               value={fillAnswer}
               onChange={(e) => setFillAnswer(e.target.value)}
-              placeholder="Type your answer..."
+              placeholder={lang === "ru" ? "Введи ответ..." : "Type your answer..."}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </QuestionCard>
@@ -525,9 +565,11 @@ export default function ProblemSolver({ userName }: Props) {
       {/* Q3: True/False */}
       {(() => {
         const q = aiData.questions[2] as TFQuestion;
+        const ruQ = aiData.ru?.questions?.[2];
+        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
         return (
-          <QuestionCard number={3} label="True / False">
-            <p className="text-sm font-medium text-slate-800 mb-3">{q.question}</p>
+          <QuestionCard number={3} label={lang === "ru" ? "Верно / Неверно" : "True / False"}>
+            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
             <div className="flex gap-3">
               {[true, false].map((val) => (
                 <button
@@ -539,7 +581,7 @@ export default function ProblemSolver({ userName }: Props) {
                       : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
                   }`}
                 >
-                  {val ? "True" : "False"}
+                  {val ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
                 </button>
               ))}
             </div>
@@ -553,7 +595,7 @@ export default function ProblemSolver({ userName }: Props) {
         className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200"
       >
         <CheckCircle className="w-4 h-4" />
-        Check My Understanding
+        {lang === "ru" ? "Проверить понимание" : "Check My Understanding"}
       </button>
     </div>
   ) : null;
@@ -593,7 +635,9 @@ export default function ProblemSolver({ userName }: Props) {
               {scoreLabel}
             </p>
             <p className={`text-xs mt-0.5 ${score >= 2 ? "text-green-600" : "text-amber-600"}`}>
-              {score >= 2 ? "You have a strong grasp of the problem." : "Check the feedback below and study the solution."}
+              {score >= 2
+                ? (lang === "ru" ? "Отлично! Ты хорошо понимаешь задачу." : "You have a strong grasp of the problem.")
+                : (lang === "ru" ? "Изучи объяснения ниже и посмотри решение." : "Check the feedback below and study the solution.")}
             </p>
           </div>
         </div>
@@ -602,9 +646,9 @@ export default function ProblemSolver({ userName }: Props) {
         <FeedbackCard
           number={1}
           correct={mcCorrect}
-          question={mc.question}
-          userAnswer={mc.options[mcAnswer ?? 0]}
-          correctAnswer={mc.options[mc.correctIndex]}
+          question={lang === "ru" && aiData.ru?.questions?.[0]?.question ? aiData.ru.questions[0].question : mc.question}
+          userAnswer={lang === "ru" && aiData.ru?.questions?.[0]?.options?.[mcAnswer ?? 0] ? aiData.ru.questions[0].options![mcAnswer ?? 0] : mc.options[mcAnswer ?? 0]}
+          correctAnswer={lang === "ru" && aiData.ru?.questions?.[0]?.options?.[mc.correctIndex] ? aiData.ru.questions[0].options![mc.correctIndex] : mc.options[mc.correctIndex]}
           explanation={mc.explanation}
         />
 
@@ -612,20 +656,20 @@ export default function ProblemSolver({ userName }: Props) {
         <FeedbackCard
           number={2}
           correct={fillCorrect}
-          question={fill.question}
+          question={lang === "ru" && aiData.ru?.questions?.[1]?.question ? aiData.ru.questions[1].question : fill.question}
           userAnswer={fillAnswer}
-          correctAnswer={fill.answer}
-          explanation={fill.explanation}
+          correctAnswer={lang === "ru" && aiData.ru?.questions?.[1]?.answer ? aiData.ru.questions[1].answer : fill.answer}
+          explanation={lang === "ru" && aiData.ru?.questions?.[1]?.explanation ? aiData.ru.questions[1].explanation : fill.explanation}
         />
 
         {/* Q3 feedback */}
         <FeedbackCard
           number={3}
           correct={tfCorrect}
-          question={tf.question}
-          userAnswer={tfAnswer === null ? "—" : tfAnswer ? "True" : "False"}
-          correctAnswer={tf.answer ? "True" : "False"}
-          explanation={tf.explanation}
+          question={lang === "ru" && aiData.ru?.questions?.[2]?.question ? aiData.ru.questions[2].question : tf.question}
+          userAnswer={tfAnswer === null ? "—" : tfAnswer ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
+          correctAnswer={tf.answer ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
+          explanation={lang === "ru" && aiData.ru?.questions?.[2]?.explanation ? aiData.ru.questions[2].explanation : tf.explanation}
         />
 
         {/* ── Big O Analysis ─────────────────────────────────────── */}
@@ -633,23 +677,27 @@ export default function ProblemSolver({ userName }: Props) {
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2">
               <span className="text-lg">📊</span>
-              <h3 className="font-bold text-white">Big O Notation</h3>
+              <h3 className="font-bold text-white">{lang === "ru" ? "Сложность (Big O)" : "Big O Notation"}</h3>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white/10 rounded-lg p-3">
-                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wide mb-1">Time</p>
+                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wide mb-1">{lang === "ru" ? "Время" : "Time"}</p>
                 <p className="text-xl font-black text-white font-mono">{aiData.bigO.time}</p>
-                <p className="text-xs text-slate-400 mt-1">{aiData.bigO.timeWhy}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {lang === "ru" && aiData.ru?.bigO?.timeWhy ? aiData.ru.bigO.timeWhy : aiData.bigO.timeWhy}
+                </p>
               </div>
               <div className="bg-white/10 rounded-lg p-3">
-                <p className="text-xs font-bold text-purple-300 uppercase tracking-wide mb-1">Space</p>
+                <p className="text-xs font-bold text-purple-300 uppercase tracking-wide mb-1">{lang === "ru" ? "Память" : "Space"}</p>
                 <p className="text-xl font-black text-white font-mono">{aiData.bigO.space}</p>
-                <p className="text-xs text-slate-400 mt-1">{aiData.bigO.spaceWhy}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {lang === "ru" && aiData.ru?.bigO?.spaceWhy ? aiData.ru.bigO.spaceWhy : aiData.bigO.spaceWhy}
+                </p>
               </div>
             </div>
             {aiData.bigO.optimizeNote && (
               <p className="text-xs text-slate-300 bg-white/5 rounded-lg px-3 py-2">
-                💡 {aiData.bigO.optimizeNote}
+                💡 {lang === "ru" && aiData.ru?.bigO?.optimizeNote ? aiData.ru.bigO.optimizeNote : aiData.bigO.optimizeNote}
               </p>
             )}
           </div>
@@ -660,15 +708,22 @@ export default function ProblemSolver({ userName }: Props) {
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">🎯</span>
-              <h3 className="font-bold text-emerald-900">Best Approach</h3>
+              <h3 className="font-bold text-emerald-900">{lang === "ru" ? "Лучший подход" : "Best Approach"}</h3>
               <span className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">
                 {aiData.bestApproach.pattern}
               </span>
             </div>
-            <p className="font-semibold text-emerald-800 text-sm">{aiData.bestApproach.name}</p>
-            <p className="text-sm text-emerald-700">{aiData.bestApproach.why}</p>
+            <p className="font-semibold text-emerald-800 text-sm">
+              {lang === "ru" && aiData.ru?.bestApproach?.name ? aiData.ru.bestApproach.name : aiData.bestApproach.name}
+            </p>
+            <p className="text-sm text-emerald-700">
+              {lang === "ru" && aiData.ru?.bestApproach?.why ? aiData.ru.bestApproach.why : aiData.bestApproach.why}
+            </p>
             <div className="bg-emerald-100 rounded-lg px-3 py-2">
-              <p className="text-xs text-emerald-600"><span className="font-bold">When to use:</span> {aiData.bestApproach.whenToUse}</p>
+              <p className="text-xs text-emerald-600">
+                <span className="font-bold">{lang === "ru" ? "Когда применять:" : "When to use:"}</span>{" "}
+                {lang === "ru" && aiData.ru?.bestApproach?.whenToUse ? aiData.ru.bestApproach.whenToUse : aiData.bestApproach.whenToUse}
+              </p>
             </div>
           </div>
         )}
@@ -678,7 +733,7 @@ export default function ProblemSolver({ userName }: Props) {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">⚡</span>
-              <h3 className="font-bold text-slate-900">Optimal Solution</h3>
+              <h3 className="font-bold text-slate-900">{lang === "ru" ? "Оптимальное решение" : "Optimal Solution"}</h3>
               <span className="ml-auto bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-full">
                 {aiData.optimalSolution.language}
               </span>
@@ -688,7 +743,10 @@ export default function ProblemSolver({ userName }: Props) {
             </pre>
             {aiData.optimalSolution.lines.length > 0 && (
               <div className="space-y-1.5">
-                {aiData.optimalSolution.lines.map((line, i) => (
+                {(lang === "ru" && aiData.ru?.optimalSolution?.lines?.length
+                  ? aiData.ru.optimalSolution.lines
+                  : aiData.optimalSolution.lines
+                ).map((line, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
                     <span className="w-4 h-4 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] mt-0.5">{i + 1}</span>
                     <span>{line}</span>
@@ -704,16 +762,20 @@ export default function ProblemSolver({ userName }: Props) {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">🔄</span>
-              <h3 className="font-bold text-amber-900">Alternative: {aiData.alternativeApproach.name}</h3>
+              <h3 className="font-bold text-amber-900">
+                {lang === "ru" ? "Альтернативный подход:" : "Alternative:"} {aiData.alternativeApproach.name}
+              </h3>
             </div>
-            <p className="text-sm text-amber-700">{aiData.alternativeApproach.description}</p>
+            <p className="text-sm text-amber-700">
+              {lang === "ru" && aiData.ru?.alternativeApproach?.description ? aiData.ru.alternativeApproach.description : aiData.alternativeApproach.description}
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
-                <span className="font-bold text-amber-800">Time:</span>{" "}
+                <span className="font-bold text-amber-800">{lang === "ru" ? "Время:" : "Time:"}</span>{" "}
                 <span className="text-amber-700 font-mono">{aiData.alternativeApproach.timeComplexity}</span>
               </div>
               <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
-                <span className="font-bold text-amber-800">Space:</span>{" "}
+                <span className="font-bold text-amber-800">{lang === "ru" ? "Память:" : "Space:"}</span>{" "}
                 <span className="text-amber-700 font-mono">{aiData.alternativeApproach.spaceComplexity}</span>
               </div>
             </div>
@@ -723,9 +785,12 @@ export default function ProblemSolver({ userName }: Props) {
               </pre>
             )}
             <p className="text-xs text-amber-600 bg-amber-100 rounded-lg px-3 py-2">
-              <span className="font-bold">When better:</span> {aiData.alternativeApproach.whenBetter}
+              <span className="font-bold">{lang === "ru" ? "Когда лучше:" : "When better:"}</span>{" "}
+              {lang === "ru" && aiData.ru?.alternativeApproach?.whenBetter ? aiData.ru.alternativeApproach.whenBetter : aiData.alternativeApproach.whenBetter}
             </p>
-            <p className="text-xs text-amber-500 italic">{aiData.alternativeApproach.tradeoff}</p>
+            <p className="text-xs text-amber-500 italic">
+              {lang === "ru" && aiData.ru?.alternativeApproach?.tradeoff ? aiData.ru.alternativeApproach.tradeoff : aiData.alternativeApproach.tradeoff}
+            </p>
           </div>
         )}
 
@@ -736,14 +801,14 @@ export default function ProblemSolver({ userName }: Props) {
             className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 rounded-xl transition-all text-sm"
           >
             <Brain className="w-4 h-4" />
-            Try to Solve
+            {lang === "ru" ? "Попробую решить" : "Try to Solve"}
           </button>
           <button
             onClick={() => setStage("solution")}
             className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200"
           >
             <Eye className="w-4 h-4" />
-            Show Solution
+            {lang === "ru" ? "Посмотреть решение" : "Show Solution"}
           </button>
         </div>
       </div>

@@ -100,9 +100,51 @@ Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
   }
 }
 
-Rules: valid JSON only, no trailing commas, actual code in optimalSolution.code using \\n for newlines.`;
+Rules: valid JSON only, no trailing commas, actual code in optimalSolution.code using \\n for newlines.
 
-    const raw = await aiComplete([{ role: "user", content: prompt }], 3000);
+IMPORTANT: After the main JSON, also add a "ru" field with Russian translations of all user-visible text:
+"ru": {
+  "questions": [
+    {
+      "question": "Russian translation of question 1",
+      "options": ["А. ...", "Б. ...", "В. ...", "Г. ..."],
+      "explanation": "Russian explanation"
+    },
+    {
+      "question": "Russian translation of fill-in-gap question",
+      "answer": "Russian answer",
+      "explanation": "Russian explanation"
+    },
+    {
+      "question": "Russian translation of true/false question",
+      "explanation": "Russian explanation"
+    }
+  ],
+  "solution": {
+    "keyInsight": "Russian key insight",
+    "steps": ["Шаг 1: ...", "Шаг 2: ...", "Шаг 3: ...", "Шаг 4: ..."]
+  },
+  "bigO": {
+    "timeWhy": "Russian explanation of time complexity",
+    "spaceWhy": "Russian explanation of space complexity",
+    "optimizeNote": "Russian optimization note"
+  },
+  "bestApproach": {
+    "name": "Russian approach name",
+    "why": "Russian explanation",
+    "whenToUse": "Russian when-to-use"
+  },
+  "optimalSolution": {
+    "lines": ["Russian line 1 explanation", "Russian line 2 explanation", "..."]
+  },
+  "alternativeApproach": {
+    "description": "Russian description",
+    "whenBetter": "Russian when-better",
+    "tradeoff": "Russian tradeoff"
+  }
+}`;
+
+    const raw = await aiComplete([{ role: "user", content: prompt }], 4500);
 
     const repaired = repairJson(raw);
 
