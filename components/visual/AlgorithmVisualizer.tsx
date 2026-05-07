@@ -75,7 +75,8 @@ function StepDots({ total, current, onJump }: { total: number; current: number; 
 // ─── Array visualization ──────────────────────────────────────────────────────
 
 function ArrayViz({ array, animKey }: { array: NonNullable<VisualStep["array"]>; animKey: number }) {
-  const windowIndices = array.colors.map((c, i) => c === "window" ? i : -1).filter(i => i >= 0);
+  const colors = array.colors ?? [];
+  const windowIndices = colors.map((c, i) => c === "window" ? i : -1).filter(i => i >= 0);
   const wStart = windowIndices[0] ?? -1;
   const wEnd   = windowIndices[windowIndices.length - 1] ?? -1;
   const cellSize = 72;
@@ -544,13 +545,29 @@ function EdgeCard({ ec }: { ec: PatternVisualization["edgeCases"][number] }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AlgorithmVisualizer({ visualization }: { visualization: PatternVisualization }) {
+  // Normalize — AI sometimes omits arrays entirely
+  const steps         = visualization?.steps         ?? [];
+  const templateCode  = visualization?.templateCode  ?? [];
+  const keyInsights   = visualization?.keyInsights   ?? [];
+  const commonMistakes= visualization?.commonMistakes?? [];
+  const edgeCases     = visualization?.edgeCases     ?? [];
+
   const [step, setStep]         = useState(0);
   const [playing, setPlaying]   = useState(false);
   const [speed, setSpeed]       = useState(1600);
   const [animKey, setAnimKey]   = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const total = visualization.steps.length;
-  const cur   = visualization.steps[step];
+  const total = steps.length;
+  const cur   = steps[step] ?? steps[0];
+
+  // Empty visualization guard
+  if (!cur) {
+    return (
+      <div style={{ padding: "32px 24px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+        No visualization data available.
+      </div>
+    );
+  }
 
   const goTo = useCallback((n: number) => {
     const c = Math.max(0, Math.min(total - 1, n));
@@ -581,13 +598,13 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
       {/* ── Header ── */}
       <div style={{ background: "white", padding: "20px 24px 16px", borderBottom: "1.5px solid #f1f5f9" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#6366f1", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-          {visualization.title}
+          {visualization?.title ?? "Visual Explanation"}
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0, lineHeight: 1.3 }}>
-          {visualization.problemTitle}
+          {visualization?.problemTitle ?? ""}
         </h2>
         <code style={{ fontSize: 13, color: "#475569", fontFamily: "monospace", display: "block", marginTop: 4 }}>
-          {visualization.problemInput}
+          {visualization?.problemInput ?? ""}
         </code>
       </div>
 
@@ -667,7 +684,7 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
         {cur.dpTable && <DPTableViz dpTable={cur.dpTable} />}
         {cur.hashmap !== undefined && <HashmapViz entries={cur.hashmap} />}
         {cur.stack && <StackViz stack={cur.stack} />}
-        {cur.variables && cur.variables.length > 0 && <VarsStrip variables={cur.variables} />}
+        {cur.variables && cur.variables.length > 0 && <VarsStrip variables={cur.variables ?? []} />}
 
         {!cur.array && !cur.linkedListNodes && !cur.grid && !cur.dpTable && cur.hashmap === undefined && !cur.stack && (
           <div style={{ color: "#cbd5e1", fontSize: 14, padding: "32px 0" }}>No visualization this step</div>
@@ -676,7 +693,7 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
 
       {/* ── CODE HIGHLIGHT ── */}
       <div style={{ padding: "0 24px 16px" }}>
-        <CodeHighlight lines={visualization.templateCode} activeLine={cur.codeLineIndex} />
+        <CodeHighlight lines={templateCode} activeLine={cur.codeLineIndex ?? 0} />
       </div>
 
       {/* ── CONTROLS ── */}
@@ -744,10 +761,10 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
           <div style={{ borderRadius: 12, overflow: "hidden", border: "1.5px solid #e2e8f0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
               <span style={{ fontSize: 12, color: "#94a3b8" }}>Python</span>
-              <CopyButton text={visualization.templateCode.join("\n")} />
+              <CopyButton text={templateCode.join("\n")} />
             </div>
             <pre style={{ margin: 0, padding: "14px 16px", background: "#1e293b", color: "#94a3b8", fontSize: 13, fontFamily: "monospace", overflowX: "auto", lineHeight: 1.6 }}>
-              <code>{visualization.templateCode.join("\n")}</code>
+              <code>{templateCode.join("\n")}</code>
             </pre>
           </div>
         </div>
@@ -759,8 +776,8 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
           <CheckCircle2 size={16} color="#16a34a" /> Key Insights
         </h3>
         <div style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 12, padding: "14px 16px" }}>
-          {visualization.keyInsights.map((ins, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < visualization.keyInsights.length - 1 ? 10 : 0 }}>
+          {keyInsights.map((ins, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < keyInsights.length - 1 ? 10 : 0 }}>
               <span style={{ color: "#16a34a", marginTop: 2 }}>✓</span>
               <p style={{ margin: 0, fontSize: 13, color: "#166534", lineHeight: 1.6 }}>{ins}</p>
             </div>
@@ -774,8 +791,8 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
           <AlertTriangle size={16} color="#f97316" /> Common Mistakes
         </h3>
         <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12, padding: "14px 16px" }}>
-          {visualization.commonMistakes.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < visualization.commonMistakes.length - 1 ? 10 : 0 }}>
+          {commonMistakes.map((m, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < commonMistakes.length - 1 ? 10 : 0 }}>
               <span style={{ color: "#f97316", marginTop: 2 }}>⚠</span>
               <p style={{ margin: 0, fontSize: 13, color: "#9a3412", lineHeight: 1.6 }}>{m}</p>
             </div>
@@ -784,13 +801,13 @@ export default function AlgorithmVisualizer({ visualization }: { visualization: 
       </section>
 
       {/* ── EDGE CASES ── */}
-      {visualization.edgeCases.length > 0 && (
+      {edgeCases.length > 0 && (
         <section style={{ margin: "0 24px 24px" }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: "#475569", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
             <AlertTriangle size={16} color="#f59e0b" /> Edge Cases
           </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-            {visualization.edgeCases.map((ec, i) => <EdgeCard key={i} ec={ec} />)}
+            {edgeCases.map((ec, i) => <EdgeCard key={i} ec={ec} />)}
           </div>
         </section>
       )}

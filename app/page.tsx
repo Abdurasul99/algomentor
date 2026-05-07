@@ -220,77 +220,81 @@ export default async function DashboardPage() {
         }}
       >
         {/* Top section */}
-        <div className="px-7 pt-7 pb-5 flex flex-col md:flex-row md:items-start md:justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-slate-400 text-xs font-medium tracking-wide uppercase">Active Session</span>
-            </div>
-            <h1 className="text-3xl font-black text-white leading-tight tracking-tight">
-              Welcome back,<br />
-              <span style={{ background: "linear-gradient(90deg,#818cf8,#c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                {firstName.toUpperCase()}
-              </span>
-            </h1>
-            <p className="text-slate-400 text-sm mt-2">Keep the momentum — every session counts.</p>
+        <div className="px-7 pt-7 pb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-slate-400 text-xs font-medium tracking-wide uppercase">Active Session</span>
           </div>
-
-          {/* Interview readiness ring */}
-          <div className="flex items-center gap-5">
-            <div className="text-center">
-              <div className="relative w-20 h-20">
-                <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="32" fill="none" stroke="#1e2a45" strokeWidth="7" />
-                  <circle
-                    cx="40" cy="40" r="32" fill="none"
-                    stroke="url(#ring_grad)" strokeWidth="7"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(data.interviewReadiness / 100) * 201} 201`}
-                  />
-                  <defs>
-                    <linearGradient id="ring_grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#818cf8"/>
-                      <stop offset="100%" stopColor="#c084fc"/>
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-white font-black text-lg leading-none">{data.interviewReadiness}%</span>
-                </div>
-              </div>
-              <p className="text-slate-400 text-xs mt-1.5 font-medium">Interview Ready</p>
-            </div>
-          </div>
+          <h1 className="text-3xl font-black text-white leading-tight tracking-tight">
+            Welcome back,{" "}
+            <span style={{ background: "linear-gradient(90deg,#818cf8,#c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              {firstName.toUpperCase()}
+            </span>
+          </h1>
+          <p className="text-slate-400 text-sm mt-2">Keep the momentum — every session counts.</p>
         </div>
 
         {/* LeetCode stats strip */}
-        {lc && (
-          <div
-            className="mx-5 mb-5 rounded-xl grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-white/10"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <div className="flex flex-col items-center py-4 px-3">
-              <span className="text-2xl font-black text-white">{lc.totalSolved ?? 0}</span>
-              <span className="text-slate-400 text-xs mt-0.5 font-medium">Total Solved</span>
+        {lc ? (
+          <div className="mx-5 mb-5 rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            {/* LeetCode header row */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
+              {/* LeetCode logo */}
+              <svg width="18" height="18" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M36.7 36.2c-1.2 1.3-2.9 2-4.7 2H17.5c-1.8 0-3.5-.7-4.7-2L6.5 29.4c-1.2-1.3-1.2-3.3 0-4.6l6.3-6.8c1.2-1.3 2.9-2 4.7-2H32c1.8 0 3.5.7 4.7 2l6.3 6.8c1.2 1.3 1.2 3.3 0 4.6l-6.3 6.8z" fill="#FFA116"/>
+                <path d="M21.5 12.5l-9 9.5M21.5 37.5l-9-9.5" stroke="#FFA116" strokeWidth="3" strokeLinecap="round"/>
+                <rect x="20" y="23" width="16" height="4" rx="2" fill="white" opacity="0.9"/>
+              </svg>
+              <span className="text-xs font-bold text-slate-300">LeetCode</span>
+              <span className="text-xs text-slate-500 ml-1">· synced</span>
+              {lc.username && (
+                <span className="text-xs text-slate-500 font-mono">@{lc.username}</span>
+              )}
             </div>
-            <div className="flex flex-col items-center py-4 px-3">
-              <span className="text-2xl font-black" style={{ color: "#4ade80" }}>{lc.easySolved ?? 0}</span>
-              <span className="text-slate-400 text-xs mt-0.5 font-medium">Easy</span>
-            </div>
-            <div className="flex flex-col items-center py-4 px-3">
-              <span className="text-2xl font-black" style={{ color: "#fb923c" }}>{lc.mediumSolved ?? 0}</span>
-              <span className="text-slate-400 text-xs mt-0.5 font-medium">Medium</span>
-            </div>
-            <div className="flex flex-col items-center py-4 px-3">
-              <span className="text-2xl font-black" style={{ color: "#f87171" }}>{lc.hardSolved ?? 0}</span>
-              <span className="text-slate-400 text-xs mt-0.5 font-medium">Hard</span>
-            </div>
-            {(lc.contestRating ?? 0) > 0 && (
+            {/* Stats row */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
               <div className="flex flex-col items-center py-4 px-3">
-                <span className="text-2xl font-black" style={{ color: "#fbbf24" }}>{Math.round(lc.contestRating!)}</span>
-                <span className="text-slate-400 text-xs mt-0.5 font-medium">Contest Rating</span>
+                <span className="text-2xl font-black text-white">{lc.totalSolved ?? 0}</span>
+                <span className="text-slate-400 text-xs mt-0.5 font-medium">Total Solved</span>
               </div>
-            )}
+              <div className="flex flex-col items-center py-4 px-3">
+                <span className="text-2xl font-black" style={{ color: "#4ade80" }}>{lc.easySolved ?? 0}</span>
+                <span className="text-slate-400 text-xs mt-0.5 font-medium">Easy</span>
+              </div>
+              <div className="flex flex-col items-center py-4 px-3">
+                <span className="text-2xl font-black" style={{ color: "#fb923c" }}>{lc.mediumSolved ?? 0}</span>
+                <span className="text-slate-400 text-xs mt-0.5 font-medium">Medium</span>
+              </div>
+              <div className="flex flex-col items-center py-4 px-3">
+                <span className="text-2xl font-black" style={{ color: "#f87171" }}>{lc.hardSolved ?? 0}</span>
+                <span className="text-slate-400 text-xs mt-0.5 font-medium">Hard</span>
+              </div>
+              {(lc.contestRating ?? 0) > 0 ? (
+                <div className="flex flex-col items-center py-4 px-3">
+                  <span className="text-2xl font-black" style={{ color: "#fbbf24" }}>{Math.round(lc.contestRating!)}</span>
+                  <span className="text-slate-400 text-xs mt-0.5 font-medium">Contest Rating</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-4 px-3">
+                  <span className="text-2xl font-black text-slate-600">—</span>
+                  <span className="text-slate-500 text-xs mt-0.5 font-medium">Contest Rating</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mx-5 mb-5 rounded-xl px-5 py-4 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <svg width="20" height="20" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M36.7 36.2c-1.2 1.3-2.9 2-4.7 2H17.5c-1.8 0-3.5-.7-4.7-2L6.5 29.4c-1.2-1.3-1.2-3.3 0-4.6l6.3-6.8c1.2-1.3 2.9-2 4.7-2H32c1.8 0 3.5.7 4.7 2l6.3 6.8c1.2 1.3 1.2 3.3 0 4.6l-6.3 6.8z" fill="#FFA116" opacity="0.5"/>
+              <rect x="20" y="23" width="16" height="4" rx="2" fill="white" opacity="0.4"/>
+            </svg>
+            <div>
+              <p className="text-slate-400 text-sm font-medium">LeetCode not synced</p>
+              <p className="text-slate-600 text-xs">Go to Settings to connect your LeetCode account</p>
+            </div>
+            <Link href="/settings" className="ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 transition-colors">
+              Connect →
+            </Link>
           </div>
         )}
       </div>
