@@ -5,11 +5,12 @@ import { getToken } from "next-auth/jwt";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow auth routes, API auth, and static files
+  // Allow auth routes, API auth, static files, and visual pages (safe to embed in iframes)
   if (
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
+    pathname.startsWith("/problems") ||   // visual explanation pages — no user data
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();

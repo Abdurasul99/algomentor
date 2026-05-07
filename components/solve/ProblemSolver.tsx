@@ -11,7 +11,21 @@ import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Stage = "input" | "loading" | "questions" | "answered";
-type Tab = "questions" | "youtube" | "visual";
+type Tab = "questions" | "code" | "youtube" | "visual";
+type LeftTab = "description" | "solution";
+type RunStatus = "idle" | "running" | "passed" | "wrong_answer" | "runtime_error" | "compilation_error" | "time_limit_exceeded";
+
+interface TestResult { input: string; expected: string; actual: string; passed: boolean; }
+interface RunResult {
+  status: RunStatus;
+  passed: boolean;
+  testResults: TestResult[];
+  error?: { message: string; line?: number; type: string } | null;
+  timeComplexity?: string;
+  spaceComplexity?: string;
+  feedback?: string;
+  hint?: string;
+}
 
 interface MCQuestion { type: "MultipleChoice"; question: string; options: string[]; correctIndex: number; explanation: string; }
 interface FillQuestion { type: "FillInGap"; question: string; answer: string; explanation: string; }
@@ -78,6 +92,13 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
 
   // Visual
   const [showVisualIframe, setShowVisualIframe] = useState(false);
+
+  // Code editor
+  const [leftTab, setLeftTab] = useState<LeftTab>("description");
+  const [code, setCode] = useState("");
+  const [codeLang, setCodeLang] = useState("Python");
+  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
 
   const msgRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -146,10 +167,33 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
     }
   }
 
+  async function runCode() {
+    if (!code.trim() || !title.trim()) return;
+    setRunStatus("running");
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/ai/run-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language: codeLang, problemTitle: title, problemDescription: desc }),
+      });
+      const data = await res.json() as RunResult & { error?: string };
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Run failed");
+      setRunResult(data);
+      setRunStatus(data.status as RunStatus);
+      // If passed, switch left tab to show solution summary
+      if (data.passed) setLeftTab("solution");
+    } catch {
+      setRunStatus("runtime_error");
+      setRunResult({ status: "runtime_error", passed: false, testResults: [], feedback: "Could not evaluate. Check your code syntax." });
+    }
+  }
+
   function reset() {
     setStage("input"); setAiData(null); setShowAnswers(false); setShowAnalysis(false);
     setMcAnswer(null); setFillAnswer(""); setTfAnswer(null);
     setVideos([]); setActiveVideo(null); setShowVisualIframe(false);
+    setRunStatus("idle"); setRunResult(null); setLeftTab("description"); setCode("");
   }
 
   const allAnswered = () => mcAnswer !== null && fillAnswer.trim() !== "" && tfAnswer !== null;
@@ -195,52 +239,134 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
           </div>
         </div>
 
-        {/* Problem form */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ minHeight: 0 }}>
-          {/* Title */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              {t("Problem Title", "Название задачи")}
-            </label>
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              disabled={stage !== "input"}
-              placeholder='e.g. "57. Insert Interval"'
-              className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition disabled:bg-slate-50 disabled:text-slate-400 font-medium"
-            />
-          </div>
+        {/* Left tabs: Description | Solution */}
+        <div className="flex border-b border-slate-200 px-1 shrink-0">
+          {([
+            { id: "description" as LeftTab, label: t("Description", "Описание") },
+            { id: "solution" as LeftTab, label: t("Solution", "Решение"), badge: runResult?.passed },
+          ]).map(tab => (
+            <button key={tab.id} onClick={() => setLeftTab(tab.id)}
+              className={cn("flex items-center gap-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition-all -mb-px",
+                leftTab === tab.id ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-400 hover:text-slate-700"
+              )}>
+              {tab.label}
+              {tab.badge && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+            </button>
+          ))}
+        </div>
 
-          {/* Description */}
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1.5">
+        {/* Description tab */}
+        {leftTab === "description" && (
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ minHeight: 0 }}>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                {t("Problem Title", "Название задачи")}
+              </label>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                disabled={stage !== "input"}
+                placeholder='e.g. "57. Insert Interval"'
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition disabled:bg-slate-50 disabled:text-slate-400 font-medium"
+              />
+            </div>
+            <div className="flex items-center justify-between">
               <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                 {t("Problem Description", "Описание задачи")}
               </label>
-              <span className="text-[10px] text-slate-300">
-                {t("Paste from LeetCode", "Вставь из LeetCode")}
-              </span>
+              <span className="text-[10px] text-slate-300">{t("Paste from LeetCode", "Вставь из LeetCode")}</span>
             </div>
             <textarea
               value={desc}
               onChange={e => setDesc(e.target.value)}
               disabled={stage !== "input"}
-              placeholder={t(
-                "Paste the full problem here — description, examples, constraints…",
-                "Вставь задачу сюда — описание, примеры, ограничения…"
-              )}
-              className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition resize-none disabled:bg-slate-50 disabled:text-slate-400 font-mono leading-relaxed bg-slate-50 hover:bg-white"
-              style={{ minHeight: "340px", height: "calc(100vh - 360px)" }}
+              placeholder={t("Paste the full problem here…", "Вставь задачу сюда…")}
+              className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition resize-none font-mono leading-relaxed bg-slate-50 hover:bg-white disabled:opacity-60"
+              style={{ minHeight: "300px", height: "calc(100vh - 400px)" }}
             />
+            {error && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3.5 py-3 text-sm text-red-700">
+                <span className="shrink-0">⚠️</span><span>{error}</span>
+              </div>
+            )}
           </div>
+        )}
 
-          {error && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3.5 py-3 text-sm text-red-700">
-              <span className="shrink-0 mt-0.5">⚠️</span>
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
+        {/* Solution tab — shown after successful submission */}
+        {leftTab === "solution" && (
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4" style={{ minHeight: 0 }}>
+            {runResult?.passed ? (
+              <>
+                {/* Success banner */}
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-green-800 text-base">{t("Accepted!", "Принято!")}</p>
+                      <p className="text-xs text-green-600">{t("All test cases passed", "Все тест-кейсы прошли")}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-xl p-3 border border-green-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t("Time", "Время")}</p>
+                      <p className="font-black text-slate-900 font-mono text-lg">{runResult.timeComplexity ?? "O(?)"}</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-green-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{t("Space", "Память")}</p>
+                      <p className="font-black text-slate-900 font-mono text-lg">{runResult.spaceComplexity ?? "O(?)"}</p>
+                    </div>
+                  </div>
+                </div>
+                {runResult.feedback && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                    <p className="text-xs font-bold text-blue-600 mb-1">{t("Feedback", "Отзыв")}</p>
+                    <p className="text-sm text-blue-800 leading-relaxed">{runResult.feedback}</p>
+                  </div>
+                )}
+              </>
+            ) : runResult ? (
+              <>
+                {/* Error / Wrong Answer */}
+                <div className={cn("border rounded-2xl p-5", runResult.status === "wrong_answer" ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200")}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", runResult.status === "wrong_answer" ? "bg-amber-500" : "bg-red-500")}>
+                      <XCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className={cn("font-bold text-base", runResult.status === "wrong_answer" ? "text-amber-800" : "text-red-800")}>
+                        {runResult.status === "wrong_answer" ? t("Wrong Answer", "Неверный ответ") :
+                         runResult.status === "compilation_error" ? t("Compilation Error", "Ошибка компиляции") :
+                         runResult.status === "time_limit_exceeded" ? t("Time Limit Exceeded", "Превышен лимит времени") :
+                         t("Runtime Error", "Ошибка выполнения")}
+                      </p>
+                      {runResult.error && (
+                        <p className="text-xs text-red-600 font-mono mt-0.5">{runResult.error.type}{runResult.error.line ? ` (line ${runResult.error.line})` : ""}</p>
+                      )}
+                    </div>
+                  </div>
+                  {runResult.error?.message && (
+                    <div className="bg-white rounded-xl p-3 border border-red-100 font-mono text-xs text-red-700 mb-3">
+                      {runResult.error.message}
+                    </div>
+                  )}
+                  {runResult.hint && (
+                    <div className="bg-white rounded-xl p-3 border border-amber-100">
+                      <p className="text-xs font-bold text-amber-600 mb-1">💡 {t("Hint", "Подсказка")}</p>
+                      <p className="text-sm text-amber-800">{runResult.hint}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-3 py-8">
+                <Code2 className="w-8 h-8 text-slate-300" />
+                <p className="text-sm text-slate-400 text-center">{t("Submit your code from the Code tab to see results here.", "Отправь код из вкладки Code чтобы увидеть результаты.")}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Submit */}
         <div className="px-5 py-4 border-t border-slate-100 shrink-0">
@@ -330,6 +456,7 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
             <div className="flex items-center border-b border-slate-200 px-1 shrink-0 bg-white">
               {([
                 { id: "questions" as Tab, label: t("Questions", "Вопросы"), icon: Brain, badge: showAnswers ? `${score}/3` : undefined, badgeColor: score >= 2 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700" },
+                { id: "code" as Tab, label: t("Code", "Код"), icon: Code2, badge: runResult?.passed ? "✓" : runResult && !runResult.passed ? "✗" : undefined, badgeColor: runResult?.passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700" },
                 { id: "youtube" as Tab, label: "YouTube", icon: Video, badge: undefined, badgeColor: "" },
                 { id: "visual" as Tab, label: t("Visual", "Визуал"), icon: Eye, badge: undefined, badgeColor: "" },
               ]).map(tab => (
@@ -553,6 +680,94 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* ── CODE TAB ─────────────────────────────────────────────── */}
+              {activeTab === "code" && (
+                <div className="flex flex-col h-full" style={{ minHeight: 0 }}>
+                  {/* Toolbar */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border-b border-slate-700 shrink-0">
+                    <select
+                      value={codeLang}
+                      onChange={e => setCodeLang(e.target.value)}
+                      className="text-xs bg-slate-800 text-slate-200 border border-slate-600 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+                    >
+                      {["Python", "Java", "C++", "JavaScript", "TypeScript"].map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                    <div className="flex-1" />
+                    {runResult && (
+                      <span className={cn("text-xs font-bold px-2.5 py-1 rounded-full", runResult.passed ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400")}>
+                        {runResult.passed ? t("✓ Accepted", "✓ Принято") : t("✗ " + (runResult.status === "wrong_answer" ? "Wrong Answer" : runResult.status === "compilation_error" ? "Error" : "Failed"), "✗ Ошибка")}
+                      </span>
+                    )}
+                    <button
+                      onClick={runCode}
+                      disabled={!code.trim() || runStatus === "running"}
+                      className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all"
+                    >
+                      <Play className="w-3 h-3" />
+                      {runStatus === "running" ? t("Running…", "Запуск…") : t("Run Code", "Запустить")}
+                    </button>
+                  </div>
+
+                  {/* Code editor */}
+                  <div className="flex-1 overflow-hidden relative bg-slate-950" style={{ minHeight: 0 }}>
+                    <textarea
+                      value={code}
+                      onChange={e => setCode(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                          const start = e.currentTarget.selectionStart;
+                          const end = e.currentTarget.selectionEnd;
+                          const newCode = code.substring(0, start) + "    " + code.substring(end);
+                          setCode(newCode);
+                          setTimeout(() => {
+                            e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 4;
+                          }, 0);
+                        }
+                      }}
+                      placeholder={codeLang === "Python" ? "def solution(self, ...):\n    # write your solution here\n    pass" : "// write your solution here"}
+                      spellCheck={false}
+                      className="w-full h-full bg-transparent text-slate-100 font-mono text-sm px-4 py-3 resize-none focus:outline-none placeholder-slate-600 leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Test results */}
+                  {runStatus !== "idle" && (
+                    <div className="shrink-0 border-t border-slate-700 bg-slate-900" style={{ maxHeight: "40%" }}>
+                      <div className="overflow-y-auto p-3 space-y-2">
+                        {runStatus === "running" ? (
+                          <div className="flex items-center gap-2 py-2">
+                            <div className="flex gap-1">{[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />)}</div>
+                            <span className="text-xs text-slate-400">{t("Running test cases…", "Запускаем тест-кейсы…")}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                              {t("Test Results", "Результаты тестов")} — {runResult?.testResults?.filter(r => r.passed).length ?? 0}/{runResult?.testResults?.length ?? 0} {t("passed", "прошли")}
+                            </p>
+                            {runResult?.testResults?.map((r, i) => (
+                              <div key={i} className={cn("rounded-lg px-3 py-2.5 border text-xs", r.passed ? "bg-green-950 border-green-800" : "bg-red-950 border-red-800")}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={cn("font-bold", r.passed ? "text-green-400" : "text-red-400")}>{r.passed ? "✓ PASS" : "✗ FAIL"}</span>
+                                  <span className="text-slate-500 font-mono text-[10px]">Case {i + 1}</span>
+                                </div>
+                                <div className="space-y-0.5 font-mono text-[11px]">
+                                  <p className="text-slate-400">Input: <span className="text-slate-200">{r.input}</span></p>
+                                  <p className="text-slate-400">Expected: <span className="text-green-300">{r.expected}</span></p>
+                                  {!r.passed && <p className="text-slate-400">Got: <span className="text-red-300">{r.actual}</span></p>}
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

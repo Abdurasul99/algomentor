@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink, Sparkles, Brain } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
 import type { PatternVisualization } from "@/lib/visualizations";
 import VisualGeneratorClient from "@/components/visual/VisualGeneratorClient";
 
@@ -13,7 +12,7 @@ export default async function ProblemVisualPage({
 }: {
   params: Promise<{ lcNumber: string }>;
 }) {
-  await requireUser();
+  // Visual pages are public — no auth required (safe to embed in iframes)
 
   const { lcNumber: lcNumberStr } = await params;
   const lcNumber = parseInt(lcNumberStr, 10);
