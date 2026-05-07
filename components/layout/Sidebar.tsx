@@ -15,6 +15,7 @@ import {
   Settings,
   Map,
   ChevronRight,
+  Code2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, signOut } from "next-auth/react";
@@ -23,6 +24,7 @@ const primaryNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/curriculum", label: "Outtalent Launchpad", icon: GraduationCap },
   { href: "/mentor", label: "AI Mentor", icon: Sparkles },
+  { href: "/solve", label: "Problem Solver", icon: Code2 },
 ];
 
 const learningNav = [

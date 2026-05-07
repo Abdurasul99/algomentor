@@ -4,6 +4,7 @@ import { generateMentorRecommendations, computeInterviewReadiness } from "@/lib/
 import MentorPanel from "@/components/ui/MentorPanel";
 import ProgressBar from "@/components/ui/ProgressBar";
 import StatCard from "@/components/ui/StatCard";
+import LeetcodeHistory from "@/components/dashboard/LeetcodeHistory";
 import Link from "next/link";
 import {
   BookOpen, CheckCircle, Trophy, Clock, AlertCircle,
@@ -452,6 +453,9 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── LeetCode Recent Submissions ── */}
+      <LeetcodeHistory />
 
       {/* ── Quick Links ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
