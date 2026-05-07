@@ -302,8 +302,8 @@ export default function ProblemSolver({ userName }: Props) {
             value={problemDesc}
             onChange={(e) => setProblemDesc(e.target.value)}
             placeholder="Paste the full problem description here — constraints, examples, everything..."
-            rows={9}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-y min-h-[200px]"
+            rows={14}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-y min-h-[320px]"
           />
         </div>
       </div>
@@ -764,8 +764,8 @@ export default function ProblemSolver({ userName }: Props) {
   // ── Full layout ───────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-8rem)] max-w-7xl mx-auto">
-      {/* Left panel */}
-      <div className="lg:w-[420px] xl:w-[460px] shrink-0">
+      {/* Left panel — wider so user has space to write */}
+      <div className="lg:w-[55%] xl:w-[58%] shrink-0">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 lg:sticky lg:top-6">
           {LeftPanel}
         </div>
