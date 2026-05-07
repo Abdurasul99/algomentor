@@ -1119,7 +1119,7 @@ export default function ProblemSolver({ userName }: { userName: string; leetcode
                             ✕ {t("Close", "Закрыть")}
                           </button>
                         </div>
-                        <iframe src={`/problems/${lcNumber}`} className="flex-1 w-full border-0" title={`Visual #${lcNumber}`} loading="lazy" />
+                        <iframe src={`/embed/visual/${lcNumber}`} className="flex-1 w-full border-0" title={`Visual #${lcNumber}`} loading="lazy" />
                       </div>
                     )
                   ) : (

@@ -11,6 +11,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/problems") ||   // visual explanation pages — no user data
+    pathname.startsWith("/embed") ||      // lightweight embed pages for iframes
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
