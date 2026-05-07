@@ -6,7 +6,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import LeetcodeHistory from "@/components/dashboard/LeetcodeHistory";
 import Link from "next/link";
 import {
-  BookOpen, CheckCircle, Clock, AlertCircle,
+  BookOpen, Clock, AlertCircle,
   ArrowRight, Zap, Brain, MessageSquare,
   Code2, ChevronRight, Sparkles, Trophy, Target,
 } from "lucide-react";
@@ -297,53 +297,6 @@ export default async function DashboardPage() {
             </Link>
           </div>
         )}
-      </div>
-
-      {/* ── STAT CARDS ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          {
-            label: "Problems Solved", value: data.solved,
-            sub: `of ${data.totalProblems} total`,
-            accent: "#16a34a", bg: "#f0fdf4", icon: <CheckCircle className="w-5 h-5" style={{ color: "#16a34a" }} />,
-          },
-          {
-            label: "Quiz Accuracy", value: `${data.quizAccuracy}%`,
-            sub: "correct answers",
-            accent: "#7c3aed", bg: "#faf5ff", icon: <Brain className="w-5 h-5" style={{ color: "#7c3aed" }} />,
-          },
-          {
-            label: "Modules Active", value: data.modulesInProgress,
-            sub: "in progress / done",
-            accent: "#2563eb", bg: "#eff6ff", icon: <BookOpen className="w-5 h-5" style={{ color: "#2563eb" }} />,
-          },
-          {
-            label: "Interview Readiness", value: `${data.interviewReadiness}%`,
-            sub: "overall score",
-            accent: "#dc2626", bg: "#fff1f2", icon: <Zap className="w-5 h-5" style={{ color: "#dc2626" }} />,
-          },
-        ].map((card, i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{card.label}</p>
-                <p className="text-2xl font-black text-slate-900">{card.value}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{card.sub}</p>
-              </div>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: card.bg }}>
-                {card.icon}
-              </div>
-            </div>
-            <div className="mt-3 h-1 rounded-full overflow-hidden bg-slate-100">
-              <div className="h-full rounded-full transition-all" style={{
-                width: typeof card.value === "string" && card.value.endsWith("%")
-                  ? card.value
-                  : `${Math.min(100, (Number(card.value) / (i === 0 ? data.totalProblems || 1 : 100)) * 100)}%`,
-                background: card.accent,
-              }} />
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* ── FAANG COMPANIES ──────────────────────────────────────────────────── */}
