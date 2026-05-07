@@ -15,7 +15,9 @@ export default function AppShellWrapper({ sidebar, topBar, children }: AppShellW
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isStandalonePage =
-    pathname.startsWith("/auth") || pathname.startsWith("/onboarding");
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/embed"); // iframe embed pages — no layout
 
   if (isStandalonePage) return <>{children}</>;
 
