@@ -1,1095 +1,734 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
-  Zap,
-  Brain,
-  CheckCircle,
-  XCircle,
-  Play,
-  ExternalLink,
-  Eye,
-  Lightbulb,
-  Clock,
-  Video,
-  ChevronRight,
-  RefreshCw,
-  Sparkles,
+  Brain, Sparkles, CheckCircle, XCircle, Eye,
+  RefreshCw, Video, Lightbulb, Clock, ChevronRight,
+  ExternalLink, Search, Play, Zap,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { PatternVisualization } from "@/lib/visualizations";
 
-// Lazy-load the visual generator
 const VisualGeneratorClient = dynamic(
   () => import("@/components/visual/VisualGeneratorClient"),
-  { ssr: false, loading: () => <div className="h-48 bg-slate-50 rounded-xl animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-40 bg-slate-50 rounded-xl animate-pulse" /> }
 );
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
+type Stage = "input" | "loading" | "questions" | "answered" | "solution";
+type Tab = "questions" | "solution" | "youtube" | "visual";
 
-type Stage = "input" | "questioning" | "answered" | "solution";
-
-interface MCQuestion {
-  type: "MultipleChoice";
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-}
-
-interface FillQuestion {
-  type: "FillInGap";
-  question: string;
-  answer: string;
-  explanation: string;
-}
-
-interface TFQuestion {
-  type: "TrueFalse";
-  question: string;
-  answer: boolean;
-  explanation: string;
-}
-
+interface MCQuestion { type: "MultipleChoice"; question: string; options: string[]; correctIndex: number; explanation: string; }
+interface FillQuestion { type: "FillInGap"; question: string; answer: string; explanation: string; }
+interface TFQuestion { type: "TrueFalse"; question: string; answer: boolean; explanation: string; }
 type Question = MCQuestion | FillQuestion | TFQuestion;
-
-interface SolutionData {
-  approach?: string;
-  keyInsight: string;
-  timeComplexity: string;
-  spaceComplexity: string;
-  steps: string[];
-}
-
-interface BigOData {
-  time: string;
-  timeWhy: string;
-  space: string;
-  spaceWhy: string;
-  canOptimize: boolean;
-  optimizeNote: string;
-}
-
-interface BestApproachData {
-  name: string;
-  pattern: string;
-  why: string;
-  whenToUse: string;
-}
-
-interface OptimalSolutionData {
-  language: string;
-  code: string;
-  lines: string[];
-}
-
-interface AlternativeApproachData {
-  applicable: boolean;
-  name: string;
-  description: string;
-  timeComplexity: string;
-  spaceComplexity: string;
-  whenBetter: string;
-  code?: string;
-  tradeoff: string;
-}
-
-// Russian translations structure
-interface RuTranslations {
-  questions?: Array<{
-    question?: string;
-    options?: string[];
-    answer?: string;
-    explanation?: string;
-  }>;
-  solution?: { keyInsight?: string; steps?: string[] };
-  bigO?: { timeWhy?: string; spaceWhy?: string; optimizeNote?: string };
-  bestApproach?: { name?: string; why?: string; whenToUse?: string };
-  optimalSolution?: { lines?: string[] };
-  alternativeApproach?: { description?: string; whenBetter?: string; tradeoff?: string };
-}
 
 interface AiResponse {
   questions: Question[];
-  solution: SolutionData;
-  bigO?: BigOData;
-  bestApproach?: BestApproachData;
-  optimalSolution?: OptimalSolutionData;
-  alternativeApproach?: AlternativeApproachData;
-  ru?: RuTranslations;
+  solution: { keyInsight: string; steps: string[]; timeComplexity: string; spaceComplexity: string; };
+  bigO?: { time: string; timeWhy: string; space: string; spaceWhy: string; optimizeNote: string; };
+  bestApproach?: { name: string; pattern: string; why: string; whenToUse: string; };
+  optimalSolution?: { language: string; code: string; lines: string[]; };
+  alternativeApproach?: { applicable: boolean; name: string; description: string; timeComplexity: string; spaceComplexity: string; whenBetter: string; code?: string; tradeoff: string; };
+  ru?: {
+    questions?: Array<{ question?: string; options?: string[]; answer?: string; explanation?: string; }>;
+    solution?: { keyInsight?: string; steps?: string[]; };
+    bigO?: { timeWhy?: string; spaceWhy?: string; optimizeNote?: string; };
+    bestApproach?: { name?: string; why?: string; whenToUse?: string; };
+    optimalSolution?: { lines?: string[]; };
+    alternativeApproach?: { description?: string; whenBetter?: string; tradeoff?: string; };
+  };
 }
 
-interface YoutubeLinkData {
-  channel: string;
-  title: string;
-  url: string;
-}
+interface VideoResult { id: string; title: string; channel: string; thumbnail: string; }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
+// ── Helpers ────────────────────────────────────────────────────────────────────
 function extractLcNumber(title: string): number | null {
-  const match = title.match(/^(\d+)\./);
-  return match ? parseInt(match[1], 10) : null;
+  const m = title.match(/^(\d+)\./);
+  return m ? parseInt(m[1], 10) : null;
 }
-
-function extractProblemName(title: string): string {
+function cleanProblemName(title: string): string {
   return title.replace(/^\d+\.\s*/, "").trim();
 }
 
-function buildYoutubeLinks(problemTitle: string): YoutubeLinkData[] {
-  const slug = extractProblemName(problemTitle).toLowerCase().replace(/\s+/g, "+");
-  const full = problemTitle.toLowerCase().replace(/\s+/g, "+");
-  return [
-    {
-      channel: "NeetCode",
-      title: `${problemTitle} - LeetCode Solution`,
-      url: `https://www.youtube.com/results?search_query=neetcode+${slug}`,
-    },
-    {
-      channel: "Abdul Bari",
-      title: `${extractProblemName(problemTitle)} Algorithm Explained`,
-      url: `https://www.youtube.com/results?search_query=abdul+bari+${slug}`,
-    },
-    {
-      channel: "Back To Back SWE",
-      title: `${extractProblemName(problemTitle)} LeetCode`,
-      url: `https://www.youtube.com/results?search_query=back+to+back+swe+${slug}`,
-    },
-    {
-      channel: "Search All",
-      title: `${problemTitle} LeetCode Solution`,
-      url: `https://www.youtube.com/results?search_query=${full}+leetcode+solution+python`,
-    },
-  ];
-}
-
-const LOADING_MESSAGES = [
-  "Analyzing your problem...",
-  "Crafting understanding questions...",
-  "Building solution walkthrough...",
-  "Identifying key algorithmic insights...",
-  "Finalizing your study session...",
+const LOADING_MSGS = [
+  "Analyzing the problem…", "Generating understanding questions…",
+  "Building solution analysis…", "Almost ready…",
 ];
 
-// ── Props ────────────────────────────────────────────────────────────────────
-
-interface Props {
-  userName: string;
-  leetcodeUsername?: string;
-}
-
-// ── Component ────────────────────────────────────────────────────────────────
-
-export default function ProblemSolver({ userName }: Props) {
-  const searchParams = useSearchParams();
-
-  // Input state
-  const [problemTitle, setProblemTitle] = useState(
-    searchParams.get("problem") ?? ""
-  );
-  const [problemDesc, setProblemDesc] = useState(
-    searchParams.get("description") ?? ""
-  );
-
-  // Stage state
-  const [stage, setStage] = useState<Stage>("input");
-
-  // Language toggle — EN or RU
-  const [lang, setLang] = useState<"en" | "ru">("en");
-
-  // AI data
-  const [aiData, setAiData] = useState<AiResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
-  const [error, setError] = useState("");
-
-  // Answers tracking
-  const [mcAnswer, setMcAnswer] = useState<number | null>(null);
-  const [fillAnswer, setFillAnswer] = useState("");
-  const [tfAnswer, setTfAnswer] = useState<boolean | null>(null);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [showVisual, setShowVisual] = useState(false);
-  // Analysis sections are locked until user clicks "Reveal Analysis"
-  const [showAnalysis, setShowAnalysis] = useState(false);
-
-  // Loading message cycling
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (loading) {
-      let i = 0;
-      setLoadingMsg(LOADING_MESSAGES[0]);
-      intervalRef.current = setInterval(() => {
-        i = (i + 1) % LOADING_MESSAGES.length;
-        setLoadingMsg(LOADING_MESSAGES[i]);
-      }, 2500);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [loading]);
-
-  // ── Actions ──────────────────────────────────────────────────────────────
-
-  async function handleAiHelp() {
-    if (!problemTitle.trim() || !problemDesc.trim()) {
-      setError("Please fill in both the problem title and description.");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    setShowFeedback(false);
-    setMcAnswer(null);
-    setFillAnswer("");
-    setTfAnswer(null);
-
-    try {
-      const res = await fetch("/api/ai/problem-help", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          problemTitle: problemTitle.trim(),
-          problemDescription: problemDesc.trim(),
-        }),
-      });
-
-      const data = (await res.json()) as AiResponse & { error?: string };
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? `Server error ${res.status}`);
-      }
-
-      if (!data.questions || !data.solution) {
-        throw new Error("Invalid AI response format.");
-      }
-
-      setAiData(data);
-      setStage("questioning");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function allAnswered(): boolean {
-    return mcAnswer !== null && fillAnswer.trim().length > 0 && tfAnswer !== null;
-  }
-
-  function handleCheckAnswers() {
-    if (!allAnswered()) return;
-    setShowFeedback(true);
-    setStage("answered");
-  }
-
-  function computeScore(): number {
-    if (!aiData) return 0;
-    const q = aiData.questions;
-    let score = 0;
-
-    const mc = q[0] as MCQuestion;
-    if (mcAnswer === mc.correctIndex) score++;
-
-    const fill = q[1] as FillQuestion;
-    if (fillAnswer.trim().toLowerCase() === fill.answer.toLowerCase()) score++;
-
-    const tf = q[2] as TFQuestion;
-    if (tfAnswer === tf.answer) score++;
-
-    return score;
-  }
-
-  function handleReset() {
-    setStage("input");
-    setAiData(null);
-    setShowFeedback(false);
-    setShowVisual(false);
-    setShowAnalysis(false);
-    setMcAnswer(null);
-    setFillAnswer("");
-    setTfAnswer(null);
-    setError("");
-  }
-
-  // ── Sub-renders ───────────────────────────────────────────────────────────
-
-  const firstName = userName.split(" ")[0];
-  const lcNumber = extractLcNumber(problemTitle);
-  const problemName = extractProblemName(problemTitle);
-  const youtubeLinks = buildYoutubeLinks(problemTitle || "LeetCode Problem");
-
-  // ── Left Panel ────────────────────────────────────────────────────────────
-
-  const LeftPanel = (
-    <div className="flex flex-col gap-4 h-full">
-      {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-          <Zap className="w-4.5 h-4.5 text-white" />
-        </div>
-        <div>
-          <h1 className="font-bold text-slate-900 text-lg leading-tight">Problem Solver</h1>
-          <p className="text-xs text-slate-500">Hi {firstName} — let's break it down</p>
-        </div>
-      </div>
-
-      {/* Input fields — always shown */}
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-            Problem Title
-          </label>
-          <input
-            type="text"
-            value={problemTitle}
-            onChange={(e) => setProblemTitle(e.target.value)}
-            placeholder='e.g. "57. Insert Interval"'
-            className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-            Problem Description
-          </label>
-          <textarea
-            value={problemDesc}
-            onChange={(e) => setProblemDesc(e.target.value)}
-            placeholder="Paste the full problem description here — constraints, examples, everything..."
-            rows={14}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-y min-h-[320px]"
-          />
-        </div>
-      </div>
-
-      {error && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
-
-      <button
-        onClick={handleAiHelp}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200 hover:shadow-md hover:shadow-indigo-200 active:scale-[0.98]"
-      >
-        {loading ? (
-          <>
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-4 h-4" />
-            AI Help
-          </>
-        )}
-      </button>
-
-      {/* Reference card when past input stage */}
-      {stage !== "input" && problemTitle && (
-        <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-          <p className="text-xs font-semibold text-indigo-600 mb-0.5">Solving</p>
-          <p className="font-bold text-slate-900 text-sm">{problemTitle}</p>
-          <button
-            onClick={handleReset}
-            className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors"
-          >
-            <RefreshCw className="w-3 h-3" /> Start new problem
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── Right Panel: EMPTY STATE ──────────────────────────────────────────────
-
-  const EmptyState = (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 py-8">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Brain className="w-8 h-8 text-indigo-500" />
-          </div>
-          <h2 className="font-bold text-slate-900 text-lg">Ready to help you solve it</h2>
-          <p className="text-sm text-slate-500 mt-1.5 max-w-xs mx-auto">
-            Paste a problem on the left and click AI Help to start your study session.
-          </p>
-        </div>
-
-        <div className="grid gap-3 w-full max-w-sm">
-          {[
-            {
-              icon: Brain,
-              color: "text-indigo-600",
-              bg: "bg-indigo-50",
-              label: "Understanding Check",
-              desc: "AI quizzes you on the problem before showing the solution",
-            },
-            {
-              icon: Video,
-              color: "text-red-600",
-              bg: "bg-red-50",
-              label: "YouTube Solutions",
-              desc: "Find the best video explanations from top channels",
-            },
-            {
-              icon: Eye,
-              color: "text-purple-600",
-              bg: "bg-purple-50",
-              label: "Visual Walkthrough",
-              desc: "Step-by-step visual explanation generated by AI",
-            },
-          ].map(({ icon: Icon, color, bg, label, desc }) => (
-            <div
-              key={label}
-              className="flex items-start gap-3 bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
-            >
-              <div className={`w-9 h-9 ${bg} rounded-lg flex items-center justify-center shrink-0`}>
-                <Icon className={`w-4.5 h-4.5 ${color}`} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">{label}</p>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Right Panel: LOADING ──────────────────────────────────────────────────
-
-  const LoadingState = (
-    <div className="flex flex-col items-center justify-center h-full py-16 gap-6">
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-indigo-400/20 blur-xl animate-pulse" />
-        <div className="relative w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-200">
-          <Sparkles className="w-10 h-10 text-white" />
-        </div>
-        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-400 animate-spin" />
-      </div>
-      <div className="text-center">
-        <h3 className="font-bold text-slate-800 text-lg">AI Mentor is thinking...</h3>
-        <p className="text-sm text-slate-500 mt-1">Crafting your personalized study session</p>
-      </div>
-      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-5 py-2.5">
-        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" />
-        <span className="text-sm font-medium text-indigo-700 min-w-[220px] text-center">
-          {loadingMsg}
-        </span>
-      </div>
-    </div>
-  );
-
-  // ── Right Panel: QUESTIONING ──────────────────────────────────────────────
-
-  const QuestioningState = aiData ? (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-          <Brain className="w-5 h-5 text-amber-600" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-slate-900">
-            {lang === "ru" ? "Понимаешь эту задачу?" : "Do you understand this problem?"}
-          </h2>
-          <p className="text-xs text-slate-500">
-            {lang === "ru" ? "Ответь на 3 вопроса, потом проверь понимание" : "Answer all 3 questions, then check your understanding"}
-          </p>
-        </div>
-        {/* Language toggle */}
-        <button
-          onClick={() => setLang(l => l === "en" ? "ru" : "en")}
-          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-            lang === "ru"
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-600"
-          }`}
-          title="Toggle language / Переключить язык"
-        >
-          {lang === "ru" ? "🇷🇺 РУС" : "🇬🇧 ENG"}
-        </button>
-      </div>
-
-      {/* Q1: Multiple Choice */}
-      {(() => {
-        const q = aiData.questions[0] as MCQuestion;
-        const ruQ = aiData.ru?.questions?.[0];
-        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
-        const displayOptions = lang === "ru" && ruQ?.options?.length ? ruQ.options : q.options;
-        return (
-          <QuestionCard number={1} label={lang === "ru" ? "Выбор ответа" : "Multiple Choice"}>
-            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
-            <div className="space-y-2">
-              {displayOptions.map((opt, i) => (
-                <button
-                  key={i}
-                  onClick={() => setMcAnswer(i)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                    mcAnswer === i
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40"
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </QuestionCard>
-        );
-      })()}
-
-      {/* Q2: Fill in the Gap */}
-      {(() => {
-        const q = aiData.questions[1] as FillQuestion;
-        const ruQ = aiData.ru?.questions?.[1];
-        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
-        return (
-          <QuestionCard number={2} label={lang === "ru" ? "Заполни пропуск" : "Fill in the Gap"}>
-            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
-            <input
-              type="text"
-              value={fillAnswer}
-              onChange={(e) => setFillAnswer(e.target.value)}
-              placeholder={lang === "ru" ? "Введи ответ..." : "Type your answer..."}
-              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-            />
-          </QuestionCard>
-        );
-      })()}
-
-      {/* Q3: True/False */}
-      {(() => {
-        const q = aiData.questions[2] as TFQuestion;
-        const ruQ = aiData.ru?.questions?.[2];
-        const displayQuestion = lang === "ru" && ruQ?.question ? ruQ.question : q.question;
-        return (
-          <QuestionCard number={3} label={lang === "ru" ? "Верно / Неверно" : "True / False"}>
-            <p className="text-sm font-medium text-slate-800 mb-3">{displayQuestion}</p>
-            <div className="flex gap-3">
-              {[true, false].map((val) => (
-                <button
-                  key={String(val)}
-                  onClick={() => setTfAnswer(val)}
-                  className={`flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                    tfAnswer === val
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-800"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
-                  }`}
-                >
-                  {val ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
-                </button>
-              ))}
-            </div>
-          </QuestionCard>
-        );
-      })()}
-
-      <button
-        onClick={handleCheckAnswers}
-        disabled={!allAnswered()}
-        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200"
-      >
-        <CheckCircle className="w-4 h-4" />
-        {lang === "ru" ? "Проверить понимание" : "Check My Understanding"}
-      </button>
-    </div>
-  ) : null;
-
-  // ── Right Panel: ANSWERED ─────────────────────────────────────────────────
-
-  const AnsweredState = aiData && showFeedback ? (() => {
-    const score = computeScore();
-    const mc = aiData.questions[0] as MCQuestion;
-    const fill = aiData.questions[1] as FillQuestion;
-    const tf = aiData.questions[2] as TFQuestion;
-
-    const mcCorrect = mcAnswer === mc.correctIndex;
-    const fillCorrect = fillAnswer.trim().toLowerCase() === fill.answer.toLowerCase();
-    const tfCorrect = tfAnswer === tf.answer;
-
-    const scoreLabel =
-      score === 3
-        ? "Excellent understanding!"
-        : score === 2
-        ? "Good understanding!"
-        : score === 1
-        ? "Let's review the solution"
-        : "Let's walk through this together";
-
-    return (
-      <div className="flex flex-col gap-5">
-        {/* Score banner */}
-        <div className={`rounded-xl px-5 py-4 flex items-center gap-4 ${
-          score >= 2 ? "bg-green-50 border border-green-200" : "bg-amber-50 border border-amber-200"
-        }`}>
-          <div className={`text-3xl font-black ${score >= 2 ? "text-green-700" : "text-amber-700"}`}>
-            {score}/3
-          </div>
-          <div>
-            <p className={`font-bold text-sm ${score >= 2 ? "text-green-800" : "text-amber-800"}`}>
-              {scoreLabel}
-            </p>
-            <p className={`text-xs mt-0.5 ${score >= 2 ? "text-green-600" : "text-amber-600"}`}>
-              {score >= 2
-                ? (lang === "ru" ? "Отлично! Ты хорошо понимаешь задачу." : "You have a strong grasp of the problem.")
-                : (lang === "ru" ? "Изучи объяснения ниже и посмотри решение." : "Check the feedback below and study the solution.")}
-            </p>
-          </div>
-        </div>
-
-        {/* Q1 feedback */}
-        <FeedbackCard
-          number={1}
-          correct={mcCorrect}
-          question={lang === "ru" && aiData.ru?.questions?.[0]?.question ? aiData.ru.questions[0].question : mc.question}
-          userAnswer={lang === "ru" && aiData.ru?.questions?.[0]?.options?.[mcAnswer ?? 0] ? aiData.ru.questions[0].options![mcAnswer ?? 0] : mc.options[mcAnswer ?? 0]}
-          correctAnswer={lang === "ru" && aiData.ru?.questions?.[0]?.options?.[mc.correctIndex] ? aiData.ru.questions[0].options![mc.correctIndex] : mc.options[mc.correctIndex]}
-          explanation={mc.explanation}
-        />
-
-        {/* Q2 feedback */}
-        <FeedbackCard
-          number={2}
-          correct={fillCorrect}
-          question={lang === "ru" && aiData.ru?.questions?.[1]?.question ? aiData.ru.questions[1].question : fill.question}
-          userAnswer={fillAnswer}
-          correctAnswer={lang === "ru" && aiData.ru?.questions?.[1]?.answer ? aiData.ru.questions[1].answer : fill.answer}
-          explanation={lang === "ru" && aiData.ru?.questions?.[1]?.explanation ? aiData.ru.questions[1].explanation : fill.explanation}
-        />
-
-        {/* Q3 feedback */}
-        <FeedbackCard
-          number={3}
-          correct={tfCorrect}
-          question={lang === "ru" && aiData.ru?.questions?.[2]?.question ? aiData.ru.questions[2].question : tf.question}
-          userAnswer={tfAnswer === null ? "—" : tfAnswer ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
-          correctAnswer={tf.answer ? (lang === "ru" ? "Верно" : "True") : (lang === "ru" ? "Неверно" : "False")}
-          explanation={lang === "ru" && aiData.ru?.questions?.[2]?.explanation ? aiData.ru.questions[2].explanation : tf.explanation}
-        />
-
-        {/* ── Unlock Analysis Gate ───────────────────────────────── */}
-        {!showAnalysis && (
-          <button
-            onClick={() => setShowAnalysis(true)}
-            className="w-full group border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl py-5 px-4 flex flex-col items-center gap-2 transition-all hover:bg-indigo-50/50"
-          >
-            <div className="w-10 h-10 bg-indigo-100 group-hover:bg-indigo-200 rounded-full flex items-center justify-center transition-all">
-              <span className="text-xl">🔓</span>
-            </div>
-            <p className="font-bold text-slate-800 text-sm">
-              {lang === "ru" ? "Открыть полный разбор" : "Reveal Full Analysis"}
-            </p>
-            <p className="text-xs text-slate-500 text-center">
-              {lang === "ru"
-                ? "Big O нотация · Лучший подход · Оптимальное решение · Альтернатива"
-                : "Big O · Best Approach · Optimal Solution · Alternative"}
-            </p>
-          </button>
-        )}
-        {showAnalysis && (
-          <div className="space-y-5" style={{ animation: "fadeInUp 0.4s ease-out" }}>
-
-        {/* ── Big O Analysis ─────────────────────────────────────── */}
-        {aiData.bigO && (
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📊</span>
-              <h3 className="font-bold text-white">{lang === "ru" ? "Сложность (Big O)" : "Big O Notation"}</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white/10 rounded-lg p-3">
-                <p className="text-xs font-bold text-indigo-300 uppercase tracking-wide mb-1">{lang === "ru" ? "Время" : "Time"}</p>
-                <p className="text-xl font-black text-white font-mono">{aiData.bigO.time}</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  {lang === "ru" && aiData.ru?.bigO?.timeWhy ? aiData.ru.bigO.timeWhy : aiData.bigO.timeWhy}
-                </p>
-              </div>
-              <div className="bg-white/10 rounded-lg p-3">
-                <p className="text-xs font-bold text-purple-300 uppercase tracking-wide mb-1">{lang === "ru" ? "Память" : "Space"}</p>
-                <p className="text-xl font-black text-white font-mono">{aiData.bigO.space}</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  {lang === "ru" && aiData.ru?.bigO?.spaceWhy ? aiData.ru.bigO.spaceWhy : aiData.bigO.spaceWhy}
-                </p>
-              </div>
-            </div>
-            {aiData.bigO.optimizeNote && (
-              <p className="text-xs text-slate-300 bg-white/5 rounded-lg px-3 py-2">
-                💡 {lang === "ru" && aiData.ru?.bigO?.optimizeNote ? aiData.ru.bigO.optimizeNote : aiData.bigO.optimizeNote}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ── Best Approach ──────────────────────────────────────── */}
-        {aiData.bestApproach && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🎯</span>
-              <h3 className="font-bold text-emerald-900">{lang === "ru" ? "Лучший подход" : "Best Approach"}</h3>
-              <span className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">
-                {aiData.bestApproach.pattern}
-              </span>
-            </div>
-            <p className="font-semibold text-emerald-800 text-sm">
-              {lang === "ru" && aiData.ru?.bestApproach?.name ? aiData.ru.bestApproach.name : aiData.bestApproach.name}
-            </p>
-            <p className="text-sm text-emerald-700">
-              {lang === "ru" && aiData.ru?.bestApproach?.why ? aiData.ru.bestApproach.why : aiData.bestApproach.why}
-            </p>
-            <div className="bg-emerald-100 rounded-lg px-3 py-2">
-              <p className="text-xs text-emerald-600">
-                <span className="font-bold">{lang === "ru" ? "Когда применять:" : "When to use:"}</span>{" "}
-                {lang === "ru" && aiData.ru?.bestApproach?.whenToUse ? aiData.ru.bestApproach.whenToUse : aiData.bestApproach.whenToUse}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Optimal Solution ───────────────────────────────────── */}
-        {aiData.optimalSolution && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">⚡</span>
-              <h3 className="font-bold text-slate-900">{lang === "ru" ? "Оптимальное решение" : "Optimal Solution"}</h3>
-              <span className="ml-auto bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-full">
-                {aiData.optimalSolution.language}
-              </span>
-            </div>
-            <pre className="bg-slate-950 text-green-400 rounded-xl p-4 text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap">
-              {aiData.optimalSolution.code}
-            </pre>
-            {aiData.optimalSolution.lines.length > 0 && (
-              <div className="space-y-1.5">
-                {(lang === "ru" && aiData.ru?.optimalSolution?.lines?.length
-                  ? aiData.ru.optimalSolution.lines
-                  : aiData.optimalSolution.lines
-                ).map((line, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                    <span className="w-4 h-4 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] mt-0.5">{i + 1}</span>
-                    <span>{line}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Alternative Approach (BFS / Binary Search / etc.) ─── */}
-        {aiData.alternativeApproach?.applicable && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🔄</span>
-              <h3 className="font-bold text-amber-900">
-                {lang === "ru" ? "Альтернативный подход:" : "Alternative:"} {aiData.alternativeApproach.name}
-              </h3>
-            </div>
-            <p className="text-sm text-amber-700">
-              {lang === "ru" && aiData.ru?.alternativeApproach?.description ? aiData.ru.alternativeApproach.description : aiData.alternativeApproach.description}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
-                <span className="font-bold text-amber-800">{lang === "ru" ? "Время:" : "Time:"}</span>{" "}
-                <span className="text-amber-700 font-mono">{aiData.alternativeApproach.timeComplexity}</span>
-              </div>
-              <div className="bg-amber-100 rounded-lg px-3 py-2 text-xs">
-                <span className="font-bold text-amber-800">{lang === "ru" ? "Память:" : "Space:"}</span>{" "}
-                <span className="text-amber-700 font-mono">{aiData.alternativeApproach.spaceComplexity}</span>
-              </div>
-            </div>
-            {aiData.alternativeApproach.code && (
-              <pre className="bg-slate-950 text-yellow-300 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                {aiData.alternativeApproach.code}
-              </pre>
-            )}
-            <p className="text-xs text-amber-600 bg-amber-100 rounded-lg px-3 py-2">
-              <span className="font-bold">{lang === "ru" ? "Когда лучше:" : "When better:"}</span>{" "}
-              {lang === "ru" && aiData.ru?.alternativeApproach?.whenBetter ? aiData.ru.alternativeApproach.whenBetter : aiData.alternativeApproach.whenBetter}
-            </p>
-            <p className="text-xs text-amber-500 italic">
-              {lang === "ru" && aiData.ru?.alternativeApproach?.tradeoff ? aiData.ru.alternativeApproach.tradeoff : aiData.alternativeApproach.tradeoff}
-            </p>
-          </div>
-        )}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={() => setStage("input")}
-            className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 rounded-xl transition-all text-sm"
-          >
-            <Brain className="w-4 h-4" />
-            {lang === "ru" ? "Попробую решить" : "Try to Solve"}
-          </button>
-          <button
-            onClick={() => setStage("solution")}
-            className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200"
-          >
-            <Eye className="w-4 h-4" />
-            {lang === "ru" ? "Посмотреть решение" : "Show Solution"}
-          </button>
-        </div>
-      </div>
-    );
-  })() : null;
-
-  // ── Right Panel: SOLUTION ─────────────────────────────────────────────────
-
-  const SolutionState = aiData ? (
-    <div className="flex flex-col gap-6">
-      {/* Section A: Key Approach */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-7 h-7 bg-green-50 rounded-lg flex items-center justify-center">
-            <Lightbulb className="w-4 h-4 text-green-600" />
-          </div>
-          <h2 className="font-bold text-slate-900">Key Approach</h2>
-        </div>
-
-        {/* Key insight callout */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-xs font-bold text-amber-700 mb-1">Key Insight</p>
-          <p className="text-sm text-amber-900">{aiData.solution.keyInsight}</p>
-        </div>
-
-        {/* Steps */}
-        <div className="space-y-2">
-          {aiData.solution.steps.map((step, i) => (
-            <div key={i} className="flex items-start gap-3 bg-white border border-slate-100 rounded-xl px-4 py-3">
-              <div className="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                {i + 1}
-              </div>
-              <p className="text-sm text-slate-700 leading-relaxed">{step}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Complexity */}
-        <div className="flex gap-3 mt-4">
-          <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-            <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
-            <div>
-              <p className="text-xs text-slate-500">Time</p>
-              <p className="text-sm font-bold text-slate-800">{aiData.solution.timeComplexity}</p>
-            </div>
-          </div>
-          <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-            <Lightbulb className="w-4 h-4 text-purple-600 shrink-0" />
-            <div>
-              <p className="text-xs text-slate-500">Space</p>
-              <p className="text-sm font-bold text-slate-800">{aiData.solution.spaceComplexity}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Section B: YouTube */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
-            <Video className="w-4 h-4 text-red-600" />
-          </div>
-          <h2 className="font-bold text-slate-900">Watch on YouTube</h2>
-        </div>
-        <div className="space-y-2">
-          {youtubeLinks.map((link) => (
-            <a
-              key={link.channel}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50/30 rounded-xl px-4 py-3 transition-all group"
-            >
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shrink-0">
-                <Play className="w-3.5 h-3.5 text-white fill-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-red-700">
-                  {link.channel}
-                </p>
-                <p className="text-xs text-slate-500 truncate">{link.title}</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-red-500 transition-colors" />
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* Section C: Visual Explanation */}
-      {lcNumber && (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 bg-purple-50 rounded-lg flex items-center justify-center">
-              <Eye className="w-4 h-4 text-purple-600" />
-            </div>
-            <h2 className="font-bold text-slate-900">Visual Explanation</h2>
-          </div>
-
-          {!showVisual ? (
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl p-6 text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-md shadow-purple-200">
-                <Eye className="w-6 h-6 text-white" />
-              </div>
-              <p className="font-bold text-slate-900 text-sm mb-1">
-                Visual for Problem #{lcNumber}: {problemName}
-              </p>
-              <p className="text-xs text-slate-500 mb-4">
-                Generate a step-by-step animated walkthrough with code highlights.
-              </p>
-              <button
-                onClick={() => setShowVisual(true)}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all text-sm shadow-md shadow-indigo-200"
-              >
-                <Sparkles className="w-4 h-4" />
-                Generate Visual
-              </button>
-            </div>
-          ) : (
-            <div className="border border-purple-100 rounded-2xl overflow-hidden">
-              <VisualGeneratorClient
-                lcNumber={lcNumber}
-                problemTitle={problemName}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Start over */}
-      <div className="pt-2 border-t border-slate-100">
-        <button
-          onClick={handleReset}
-          className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-medium py-2 rounded-xl hover:bg-slate-50 transition-all"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Solve a different problem
-        </button>
-      </div>
-    </div>
-  ) : null;
-
-  // ── Right panel content selector ──────────────────────────────────────────
-  let rightContent: React.ReactNode;
-  if (loading) {
-    rightContent = LoadingState;
-  } else if (stage === "input") {
-    rightContent = EmptyState;
-  } else if (stage === "questioning") {
-    rightContent = QuestioningState;
-  } else if (stage === "answered") {
-    rightContent = AnsweredState;
-  } else {
-    rightContent = SolutionState;
-  }
-
-  // ── Full layout ───────────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
+function QuestionCard({ number, label, children }: { number: number; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-8rem)] max-w-7xl mx-auto">
-      {/* Left panel — wider so user has space to write */}
-      <div className="lg:w-[55%] xl:w-[58%] shrink-0">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 lg:sticky lg:top-6">
-          {LeftPanel}
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <div className="flex-1 min-w-0">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 min-h-[500px]">
-          {rightContent}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Helper sub-components ─────────────────────────────────────────────────────
-
-function QuestionCard({
-  number,
-  label,
-  children,
-}: {
-  number: number;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center shrink-0">
-          {number}
-        </span>
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-          {label}
-        </span>
+    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="w-6 h-6 bg-indigo-600 text-white rounded-full text-xs font-bold flex items-center justify-center shrink-0">{number}</span>
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</span>
       </div>
       {children}
     </div>
   );
 }
 
-function FeedbackCard({
-  number,
-  correct,
-  question,
-  userAnswer,
-  correctAnswer,
-  explanation,
-}: {
-  number: number;
-  correct: boolean;
-  question: string;
-  userAnswer: string;
-  correctAnswer: string;
-  explanation: string;
+function FeedbackCard({ number, correct, question, userAnswer, correctAnswer, explanation }: {
+  number: number; correct: boolean; question: string; userAnswer: string; correctAnswer: string; explanation: string;
 }) {
   return (
-    <div
-      className={`rounded-2xl border p-5 ${
-        correct
-          ? "bg-green-50 border-green-200"
-          : "bg-red-50 border-red-200"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-          correct ? "bg-green-100" : "bg-red-100"
-        }`}>
-          {correct ? (
-            <CheckCircle className="w-4 h-4 text-green-600" />
-          ) : (
-            <XCircle className="w-4 h-4 text-red-500" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Q{number}
-            </span>
-            <span className={`text-xs font-bold ${correct ? "text-green-700" : "text-red-600"}`}>
-              {correct ? "Correct" : "Incorrect"}
-            </span>
+    <div className={cn("rounded-xl p-4 border", correct ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200")}>
+      <div className="flex items-start gap-2 mb-2">
+        {correct ? <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
+        <p className="text-sm font-semibold text-slate-800">Q{number}: {question}</p>
+      </div>
+      {!correct && <p className="text-xs text-red-700 mb-1 ml-6">Your answer: <span className="font-mono">{userAnswer}</span></p>}
+      <p className="text-xs text-green-700 ml-6 mb-2">Correct: <span className="font-semibold">{correctAnswer}</span></p>
+      <p className="text-xs text-slate-600 ml-6 italic">{explanation}</p>
+    </div>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+export default function ProblemSolver({ userName, leetcodeUsername }: { userName: string; leetcodeUsername?: string }) {
+  const params = useSearchParams();
+
+  // Problem input state
+  const [problemTitle, setProblemTitle] = useState(params?.get("problem") ?? "");
+  const [problemDesc, setProblemDesc] = useState(params?.get("description") ?? "");
+
+  // UI state
+  const [stage, setStage] = useState<Stage>("input");
+  const [activeTab, setActiveTab] = useState<Tab>("questions");
+  const [lang, setLang] = useState<"en" | "ru">("en");
+
+  // AI data
+  const [aiData, setAiData] = useState<AiResponse | null>(null);
+  const [loadingMsg, setLoadingMsg] = useState(LOADING_MSGS[0]);
+  const [error, setError] = useState("");
+
+  // Quiz state
+  const [mcAnswer, setMcAnswer] = useState<number | null>(null);
+  const [fillAnswer, setFillAnswer] = useState("");
+  const [tfAnswer, setTfAnswer] = useState<boolean | null>(null);
+  const [showAnswers, setShowAnswers] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
+  // YouTube
+  const [videos, setVideos] = useState<VideoResult[]>([]);
+  const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [videosLoading, setVideosLoading] = useState(false);
+
+  // Visual
+  const [showVisual, setShowVisual] = useState(false);
+
+  const msgRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cycle loading messages
+  useEffect(() => {
+    if (stage === "loading") {
+      let i = 0;
+      msgRef.current = setInterval(() => {
+        i = (i + 1) % LOADING_MSGS.length;
+        setLoadingMsg(LOADING_MSGS[i]);
+      }, 2000);
+    }
+    return () => { if (msgRef.current) clearInterval(msgRef.current); };
+  }, [stage]);
+
+  // Fetch YouTube when tab selected
+  useEffect(() => {
+    if (activeTab === "youtube" && videos.length === 0 && problemTitle) {
+      fetchYoutube();
+    }
+  }, [activeTab, problemTitle]);
+
+  const fetchYoutube = useCallback(async () => {
+    if (!problemTitle) return;
+    setVideosLoading(true);
+    try {
+      const name = cleanProblemName(problemTitle);
+      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(`neetcode ${name}`)}`);
+      const data = await res.json() as { videos: VideoResult[] };
+      if (data.videos.length > 0) {
+        setVideos(data.videos);
+        setActiveVideo(data.videos[0].id);
+      } else {
+        // fallback: show search links
+        setVideos([]);
+      }
+    } catch { setVideos([]); }
+    finally { setVideosLoading(false); }
+  }, [problemTitle]);
+
+  async function handleAiHelp() {
+    if (!problemTitle.trim() || !problemDesc.trim()) return;
+    setStage("loading");
+    setError("");
+    setAiData(null);
+    setShowAnswers(false);
+    setShowAnalysis(false);
+    setMcAnswer(null);
+    setFillAnswer("");
+    setTfAnswer(null);
+    setVideos([]);
+    setActiveVideo(null);
+    setShowVisual(false);
+
+    try {
+      const res = await fetch("/api/ai/problem-help", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problemTitle, problemDescription: problemDesc }),
+      });
+      const data = await res.json() as AiResponse & { error?: string };
+      if (!res.ok || data.error) throw new Error(data.error ?? "AI error");
+      setAiData(data);
+      setStage("questions");
+      setActiveTab("questions");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+      setStage("input");
+    }
+  }
+
+  function handleReset() {
+    setStage("input"); setAiData(null); setShowAnswers(false); setShowAnalysis(false);
+    setMcAnswer(null); setFillAnswer(""); setTfAnswer(null);
+    setVideos([]); setActiveVideo(null); setShowVisual(false);
+  }
+
+  function allAnswered() {
+    return mcAnswer !== null && fillAnswer.trim() !== "" && tfAnswer !== null;
+  }
+
+  function handleCheck() {
+    if (!allAnswered()) return;
+    setShowAnswers(true);
+    setActiveTab("questions");
+  }
+
+  // Derived text helpers
+  const t = (en: string, ru: string) => lang === "ru" ? ru : en;
+
+  const lcNumber = extractLcNumber(problemTitle);
+  const problemName = cleanProblemName(problemTitle);
+
+  // ── LEFT PANEL ──────────────────────────────────────────────────────────────
+  const leftPanel = (
+    <div className="flex flex-col h-full bg-white border-r border-slate-200">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <p className="text-sm font-medium text-slate-800 mb-2">{question}</p>
-          {!correct && (
-            <div className="bg-white/70 rounded-lg px-3 py-2 mb-2 text-xs">
-              <span className="text-red-700 font-semibold">Your answer: </span>
-              <span className="text-slate-700">{userAnswer}</span>
-              <br />
-              <span className="text-green-700 font-semibold">Correct answer: </span>
-              <span className="text-slate-700">{correctAnswer}</span>
+          <div>
+            <p className="font-bold text-slate-900 text-sm">Problem Solver</p>
+            <p className="text-xs text-slate-400">Hi {userName.split(" ")[0]} — let&apos;s break it down</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setLang(l => l === "en" ? "ru" : "en")}
+          className={cn(
+            "text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all",
+            lang === "ru" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200 hover:border-blue-400"
+          )}
+        >
+          {lang === "ru" ? "🇷🇺 RU" : "🇬🇧 EN"}
+        </button>
+      </div>
+
+      {/* Problem input */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+            {t("Problem Title", "Название задачи")}
+          </label>
+          <input
+            value={problemTitle}
+            onChange={e => setProblemTitle(e.target.value)}
+            placeholder='e.g. "57. Insert Interval"'
+            disabled={stage !== "input"}
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+            {t("Problem Description", "Описание задачи")}
+          </label>
+          <textarea
+            value={problemDesc}
+            onChange={e => setProblemDesc(e.target.value)}
+            placeholder={t(
+              "Paste the full problem description here — constraints, examples, everything...",
+              "Вставь полное описание задачи сюда — ограничения, примеры, всё..."
+            )}
+            disabled={stage !== "input"}
+            rows={12}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-60"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+      </div>
+
+      {/* Action button */}
+      <div className="px-5 py-4 border-t border-slate-100 shrink-0">
+        {stage === "input" ? (
+          <button
+            onClick={handleAiHelp}
+            disabled={!problemTitle.trim() || !problemDesc.trim()}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm shadow-indigo-200"
+          >
+            <Sparkles className="w-4 h-4" />
+            {t("AI Help", "AI Помощь")}
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-indigo-600">{t("Solving", "Решаю")}</p>
+              <p className="font-bold text-slate-900 text-sm truncate">{problemTitle}</p>
+            </div>
+            <button
+              onClick={handleReset}
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              {t("Start new problem", "Новая задача")}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── RIGHT PANEL ─────────────────────────────────────────────────────────────
+
+  // Loading state
+  if (stage === "loading") {
+    return (
+      <div className="flex h-full">
+        <div className="w-[45%] shrink-0">{leftPanel}</div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-slate-50 p-8">
+          <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center">
+            <Brain className="w-8 h-8 text-indigo-600 animate-pulse" />
+          </div>
+          <div className="text-center">
+            <p className="font-bold text-slate-800 text-lg">{t("AI is analyzing…", "AI анализирует…")}</p>
+            <p className="text-sm text-slate-500 mt-1">{loadingMsg}</p>
+          </div>
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Input state (no AI data yet)
+  if (stage === "input" || !aiData) {
+    return (
+      <div className="flex h-full">
+        <div className="w-[45%] shrink-0">{leftPanel}</div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-slate-50 p-8">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+            <Brain className="w-8 h-8 text-slate-400" />
+          </div>
+          <div className="text-center">
+            <p className="font-bold text-slate-700 text-lg">{t("Ready to help you solve it", "Готов помочь с решением")}</p>
+            <p className="text-sm text-slate-400 mt-1">{t("Paste a problem on the left and click AI Help", "Вставь задачу слева и нажми AI Помощь")}</p>
+          </div>
+          <div className="grid gap-3 w-full max-w-xs">
+            {[
+              { icon: Brain, label: t("Understanding Check", "Проверка понимания"), desc: t("AI quizzes you on the problem", "AI проверит, понял ли ты задачу") },
+              { icon: Video, label: t("YouTube Videos", "Видео на YouTube"), desc: t("Watch embedded solutions", "Смотри решения прямо здесь") },
+              { icon: Eye, label: t("Visual Walkthrough", "Визуальное объяснение"), desc: t("Step-by-step AI visualization", "Пошаговая визуализация от AI") },
+            ].map(({ icon: Icon, label, desc }) => (
+              <div key={label} className="flex items-start gap-3 bg-white border border-slate-100 rounded-xl p-3.5 shadow-sm">
+                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 text-sm">{label}</p>
+                  <p className="text-xs text-slate-400">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Tab content ─────────────────────────────────────────────────────────────
+  const mc = aiData.questions[0] as MCQuestion;
+  const fill = aiData.questions[1] as FillQuestion;
+  const tf = aiData.questions[2] as TFQuestion;
+  const mcCorrect = showAnswers && mcAnswer === mc.correctIndex;
+  const fillCorrect = showAnswers && fillAnswer.trim().toLowerCase() === fill.answer.trim().toLowerCase();
+  const tfCorrect = showAnswers && tfAnswer === tf.answer;
+  const score = [mcCorrect, fillCorrect, tfCorrect].filter(Boolean).length;
+
+  // Question tab
+  const questionsContent = (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Score banner if answered */}
+      {showAnswers && (
+        <div className={cn(
+          "shrink-0 px-5 py-3 flex items-center gap-3 border-b",
+          score >= 2 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"
+        )}>
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black shrink-0", score >= 2 ? "bg-green-100" : "bg-amber-100")}>
+            {score}/3
+          </div>
+          <div>
+            <p className={cn("font-bold text-sm", score >= 2 ? "text-green-800" : "text-amber-800")}>
+              {score >= 2 ? t("Great understanding!", "Отлично понимаешь!") : t("Review the feedback below", "Изучи объяснения ниже")}
+            </p>
+            <p className={cn("text-xs", score >= 2 ? "text-green-600" : "text-amber-600")}>
+              {score >= 2 ? t("You got the key concepts.", "Ты понял ключевые концепции.") : t("Check the solution tab for help.", "Загляни во вкладку Решение.")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {/* Q1 */}
+        <QuestionCard number={1} label={t("Multiple Choice", "Выбор ответа")}>
+          <p className="text-sm font-medium text-slate-800">
+            {lang === "ru" && aiData.ru?.questions?.[0]?.question ? aiData.ru.questions[0].question : mc.question}
+          </p>
+          <div className="space-y-2">
+            {(lang === "ru" && aiData.ru?.questions?.[0]?.options?.length ? aiData.ru.questions[0].options : mc.options).map((opt, i) => {
+              const isSelected = mcAnswer === i;
+              const isCorrect = showAnswers && i === mc.correctIndex;
+              const isWrong = showAnswers && isSelected && i !== mc.correctIndex;
+              return (
+                <button key={i} onClick={() => !showAnswers && setMcAnswer(i)}
+                  className={cn("w-full text-left px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-all",
+                    isCorrect ? "border-green-500 bg-green-50 text-green-800" :
+                    isWrong ? "border-red-400 bg-red-50 text-red-700" :
+                    isSelected ? "border-indigo-500 bg-indigo-50 text-indigo-800" :
+                    "border-slate-200 bg-white text-slate-700 hover:border-indigo-300"
+                  )}>
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+          {showAnswers && (
+            <p className="text-xs italic text-slate-500 mt-1">
+              {lang === "ru" && aiData.ru?.questions?.[0]?.explanation ? aiData.ru.questions[0].explanation : mc.explanation}
+            </p>
+          )}
+        </QuestionCard>
+
+        {/* Q2 */}
+        <QuestionCard number={2} label={t("Fill in the Gap", "Заполни пропуск")}>
+          <p className="text-sm font-medium text-slate-800">
+            {lang === "ru" && aiData.ru?.questions?.[1]?.question ? aiData.ru.questions[1].question : fill.question}
+          </p>
+          <input type="text" value={fillAnswer} onChange={e => !showAnswers && setFillAnswer(e.target.value)}
+            placeholder={t("Type your answer…", "Введи ответ…")}
+            disabled={showAnswers}
+            className={cn("w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
+              showAnswers
+                ? fillCorrect ? "border-green-400 bg-green-50 text-green-800" : "border-red-400 bg-red-50 text-red-700"
+                : "border-slate-200"
+            )}
+          />
+          {showAnswers && (
+            <div className="text-xs space-y-1">
+              {!fillCorrect && <p className="text-green-700">Correct: <span className="font-semibold">{fill.answer}</span></p>}
+              <p className="italic text-slate-500">{lang === "ru" && aiData.ru?.questions?.[1]?.explanation ? aiData.ru.questions[1].explanation : fill.explanation}</p>
             </div>
           )}
-          <p className="text-xs text-slate-600 leading-relaxed">{explanation}</p>
+        </QuestionCard>
+
+        {/* Q3 */}
+        <QuestionCard number={3} label={t("True / False", "Верно / Неверно")}>
+          <p className="text-sm font-medium text-slate-800">
+            {lang === "ru" && aiData.ru?.questions?.[2]?.question ? aiData.ru.questions[2].question : tf.question}
+          </p>
+          <div className="flex gap-3">
+            {[true, false].map(val => {
+              const isSelected = tfAnswer === val;
+              const isCorrect = showAnswers && val === tf.answer;
+              const isWrong = showAnswers && isSelected && val !== tf.answer;
+              return (
+                <button key={String(val)} onClick={() => !showAnswers && setTfAnswer(val)}
+                  className={cn("flex-1 py-2.5 rounded-xl border text-sm font-bold transition-all",
+                    isCorrect ? "border-green-500 bg-green-50 text-green-800" :
+                    isWrong ? "border-red-400 bg-red-50 text-red-700" :
+                    isSelected ? "border-indigo-500 bg-indigo-50 text-indigo-800" :
+                    "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
+                  )}>
+                  {val ? t("True", "Верно") : t("False", "Неверно")}
+                </button>
+              );
+            })}
+          </div>
+          {showAnswers && (
+            <p className="text-xs italic text-slate-500 mt-1">{lang === "ru" && aiData.ru?.questions?.[2]?.explanation ? aiData.ru.questions[2].explanation : tf.explanation}</p>
+          )}
+        </QuestionCard>
+
+        {/* Check button or Analysis unlock */}
+        {!showAnswers ? (
+          <button onClick={handleCheck} disabled={!allAnswered()}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all text-sm">
+            <CheckCircle className="w-4 h-4" />
+            {t("Check My Understanding", "Проверить понимание")}
+          </button>
+        ) : !showAnalysis ? (
+          <button onClick={() => setShowAnalysis(true)}
+            className="w-full group border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl py-4 flex flex-col items-center gap-1.5 transition-all hover:bg-indigo-50/50">
+            <span className="text-xl">🔓</span>
+            <p className="font-bold text-slate-800 text-sm">{t("Reveal Full Analysis", "Открыть полный разбор")}</p>
+            <p className="text-xs text-slate-400">{t("Big O · Approach · Optimal Code · Alternative", "Big O · Подход · Код · Альтернатива")}</p>
+          </button>
+        ) : (
+          <div className="space-y-4" style={{ animation: "fadeInUp 0.4s ease-out" }}>
+            {/* Big O */}
+            {aiData.bigO && (
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 space-y-3">
+                <p className="font-bold text-white flex items-center gap-2">📊 {t("Big O Notation", "Big O нотация")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/10 rounded-lg p-3">
+                    <p className="text-xs font-bold text-indigo-300 mb-1">{t("TIME", "ВРЕМЯ")}</p>
+                    <p className="text-xl font-black text-white font-mono">{aiData.bigO.time}</p>
+                    <p className="text-xs text-slate-400 mt-1">{lang === "ru" && aiData.ru?.bigO?.timeWhy ? aiData.ru.bigO.timeWhy : aiData.bigO.timeWhy}</p>
+                  </div>
+                  <div className="bg-white/10 rounded-lg p-3">
+                    <p className="text-xs font-bold text-purple-300 mb-1">{t("SPACE", "ПАМЯТЬ")}</p>
+                    <p className="text-xl font-black text-white font-mono">{aiData.bigO.space}</p>
+                    <p className="text-xs text-slate-400 mt-1">{lang === "ru" && aiData.ru?.bigO?.spaceWhy ? aiData.ru.bigO.spaceWhy : aiData.bigO.spaceWhy}</p>
+                  </div>
+                </div>
+                {aiData.bigO.optimizeNote && (
+                  <p className="text-xs text-slate-300 bg-white/5 rounded-lg px-3 py-2">💡 {lang === "ru" && aiData.ru?.bigO?.optimizeNote ? aiData.ru.bigO.optimizeNote : aiData.bigO.optimizeNote}</p>
+                )}
+              </div>
+            )}
+            {/* Best Approach */}
+            {aiData.bestApproach && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎯</span>
+                  <p className="font-bold text-emerald-900 text-sm">{t("Best Approach", "Лучший подход")}</p>
+                  <span className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{aiData.bestApproach.pattern}</span>
+                </div>
+                <p className="font-semibold text-emerald-800 text-sm">{lang === "ru" && aiData.ru?.bestApproach?.name ? aiData.ru.bestApproach.name : aiData.bestApproach.name}</p>
+                <p className="text-sm text-emerald-700">{lang === "ru" && aiData.ru?.bestApproach?.why ? aiData.ru.bestApproach.why : aiData.bestApproach.why}</p>
+              </div>
+            )}
+            {/* Optimal Solution */}
+            {aiData.optimalSolution && (
+              <div className="space-y-2">
+                <p className="font-bold text-slate-900 flex items-center gap-2 text-sm">⚡ {t("Optimal Solution", "Оптимальное решение")}</p>
+                <pre className="bg-slate-950 text-green-400 rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">{aiData.optimalSolution.code}</pre>
+                <div className="space-y-1">
+                  {(lang === "ru" && aiData.ru?.optimalSolution?.lines?.length ? aiData.ru.optimalSolution.lines : aiData.optimalSolution.lines).map((line, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <span className="w-4 h-4 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px]">{i + 1}</span>
+                      <span>{line}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Alternative */}
+            {aiData.alternativeApproach?.applicable && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                <p className="font-bold text-amber-900 text-sm">🔄 {t("Alternative:", "Альтернатива:")} {aiData.alternativeApproach.name}</p>
+                <p className="text-sm text-amber-700">{lang === "ru" && aiData.ru?.alternativeApproach?.description ? aiData.ru.alternativeApproach.description : aiData.alternativeApproach.description}</p>
+                <div className="flex gap-2 text-xs">
+                  <span className="bg-amber-100 rounded px-2 py-1 font-mono">{aiData.alternativeApproach.timeComplexity}</span>
+                  <span className="bg-amber-100 rounded px-2 py-1 font-mono">{aiData.alternativeApproach.spaceComplexity}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // YouTube tab
+  const youtubeContent = (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Embedded player */}
+      {activeVideo ? (
+        <div className="shrink-0 bg-black">
+          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+            <iframe
+              key={activeVideo}
+              src={`https://www.youtube-nocookie.com/embed/${activeVideo}?autoplay=1&rel=0`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 w-full h-full"
+            />
+          </div>
+        </div>
+      ) : videosLoading ? (
+        <div className="shrink-0 bg-slate-900 flex items-center justify-center" style={{ height: 200 }}>
+          <div className="text-center space-y-2">
+            <Search className="w-8 h-8 text-slate-500 mx-auto animate-pulse" />
+            <p className="text-slate-400 text-sm">{t("Searching YouTube…", "Ищем на YouTube…")}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="shrink-0 bg-slate-900 flex items-center justify-center" style={{ height: 200 }}>
+          <div className="text-center space-y-2">
+            <Video className="w-8 h-8 text-slate-500 mx-auto" />
+            <p className="text-slate-400 text-sm">{t("No videos found", "Видео не найдено")}</p>
+            <a
+              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(cleanProblemName(problemTitle) + " leetcode solution neetcode")}`}
+              target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+            >
+              <ExternalLink className="w-3 h-3" /> {t("Search on YouTube", "Найти на YouTube")}
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Video list */}
+      <div className="flex-1 overflow-y-auto">
+        {videos.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {videos.map(v => (
+              <button key={v.id} onClick={() => setActiveVideo(v.id)}
+                className={cn("w-full flex items-start gap-3 p-3.5 hover:bg-slate-50 transition-colors text-left", activeVideo === v.id && "bg-indigo-50 border-l-2 border-indigo-500")}>
+                <div className="relative shrink-0 w-24 rounded-lg overflow-hidden bg-slate-200">
+                  <img src={v.thumbnail} alt={v.title} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center", activeVideo === v.id ? "bg-indigo-600" : "bg-black/60")}>
+                      <Play className="w-3 h-3 text-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 line-clamp-2 leading-snug">{v.title}</p>
+                  <p className="text-xs text-slate-400 mt-1">{v.channel}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : !videosLoading && (
+          <div className="p-5 space-y-2">
+            <p className="text-xs font-semibold text-slate-500 mb-3">{t("Search on YouTube:", "Поиск на YouTube:")}</p>
+            {[
+              { label: "NeetCode", q: `neetcode ${cleanProblemName(problemTitle)}` },
+              { label: "Back To Back SWE", q: `back to back swe ${cleanProblemName(problemTitle)}` },
+              { label: "Kevin Naughton Jr", q: `kevin naughton ${cleanProblemName(problemTitle)}` },
+              { label: t("All results", "Все результаты"), q: `${cleanProblemName(problemTitle)} leetcode solution python` },
+            ].map(({ label, q }) => (
+              <a key={label} href={`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 p-3 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50/30 rounded-xl transition-all">
+                <Video className="w-4 h-4 text-red-500 shrink-0" />
+                <span className="text-sm font-medium text-slate-700">{label}</span>
+                <ExternalLink className="w-3 h-3 text-slate-400 ml-auto" />
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Visual tab
+  const visualContent = (
+    <div className="flex-1 overflow-y-auto p-5">
+      {lcNumber ? (
+        !showVisual ? (
+          <div className="flex flex-col items-center justify-center h-full gap-5 py-8">
+            <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center">
+              <Eye className="w-8 h-8 text-purple-600" />
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-slate-800">{t("Visual Step-by-Step Explanation", "Пошаговое визуальное объяснение")}</p>
+              <p className="text-sm text-slate-500 mt-1">
+                {t(`AI will generate a visualization for "${problemName}"`, `AI создаст визуализацию для "${problemName}"`)}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowVisual(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-purple-200"
+            >
+              <Sparkles className="w-4 h-4" />
+              {t("Generate Visual Explanation", "Сгенерировать объяснение")}
+            </button>
+          </div>
+        ) : (
+          <VisualGeneratorClient
+            lcNumber={lcNumber}
+            problemTitle={problemName}
+            initialVisualization={undefined}
+          />
+        )
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
+          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
+            <Eye className="w-7 h-7 text-slate-400" />
+          </div>
+          <p className="text-slate-500 text-sm text-center">
+            {t(
+              'Include the LeetCode number in the title (e.g. "57. Insert Interval") to generate a visual explanation.',
+              'Включи номер LeetCode в название (например "57. Insert Interval") для визуализации.'
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const tabs: { id: Tab; label: string; labelRu: string; icon: React.ReactNode }[] = [
+    { id: "questions", label: "Questions", labelRu: "Вопросы", icon: <Brain className="w-3.5 h-3.5" /> },
+    { id: "youtube", label: "YouTube", labelRu: "YouTube", icon: <Video className="w-3.5 h-3.5" /> },
+    { id: "visual", label: "Visual", labelRu: "Визуал", icon: <Eye className="w-3.5 h-3.5" /> },
+  ];
+
+  return (
+    <div className="flex h-full">
+      {/* Left panel */}
+      <div className="w-[45%] shrink-0">{leftPanel}</div>
+
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
+        {/* Tab bar */}
+        <div className="flex items-center border-b border-slate-200 px-4 shrink-0 bg-slate-50">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition-all -mb-px",
+                activeTab === tab.id
+                  ? "border-indigo-600 text-indigo-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+              )}
+            >
+              {tab.icon}
+              {lang === "ru" ? tab.labelRu : tab.label}
+              {tab.id === "questions" && showAnswers && (
+                <span className={cn("w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center ml-0.5", score >= 2 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                  {score}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {activeTab === "questions" && questionsContent}
+          {activeTab === "youtube" && youtubeContent}
+          {activeTab === "visual" && visualContent}
         </div>
       </div>
     </div>
