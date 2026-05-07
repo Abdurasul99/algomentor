@@ -44,6 +44,10 @@ ssh -i "$KEY" -o StrictHostKeyChecking=no ubuntu@$EC2 "
   DATABASE_URL='file:$DB_PATH' npx prisma generate 2>&1 | tail -2
   DATABASE_URL='file:$DB_PATH' npx prisma migrate deploy 2>&1 | tail -3
 
+  # Always fix DB permissions after deploy (tar can reset them)
+  chown -R ubuntu:ubuntu $APP_DIR/prisma/
+  chmod 664 $DB_PATH
+
   pm2 restart algomentor --update-env
   sleep 2
   pm2 status | grep algomentor
