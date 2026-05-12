@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       }),
     ]);
 
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!user) return NextResponse.json({ error: "Session expired — please log out and log in again." }, { status: 404 });
 
     let companies = "top tech companies";
     try {
