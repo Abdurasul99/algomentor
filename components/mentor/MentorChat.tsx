@@ -1,11 +1,95 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { Send, User, Zap, BookOpen, Code2, Target, TrendingUp, MessageSquare, Brain } from "lucide-react";
+import { Send, User, Volume2, VolumeX, Brain, Target, BookOpen, TrendingUp, Zap, MessageSquare, Code2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { PERSONAS } from "@/lib/personas";
 import type { Persona } from "@/lib/personas";
+
+// ─── Voice config per persona ─────────────────────────────────────────────────
+
+const VOICE_CONFIG: Record<string, { pitch: number; rate: number; gender: "male" | "female" }> = {
+  alex:   { pitch: 0.9, rate: 1.05, gender: "male" },
+  sarah:  { pitch: 1.2, rate: 1.1,  gender: "female" },
+  marcus: { pitch: 0.7, rate: 0.9,  gender: "male" },
+  priya:  { pitch: 1.1, rate: 0.95, gender: "female" },
+  diana:  { pitch: 1.15, rate: 1.0, gender: "female" },
+};
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, "code block.")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/#{1,6}\s/g, "")
+    .replace(/^[-*]\s/gm, "")
+    .replace(/^\d+\.\s/gm, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, " ")
+    .trim();
+}
+
+function useSpeech(personaId: string) {
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") synthRef.current = window.speechSynthesis;
+    return () => synthRef.current?.cancel();
+  }, []);
+
+  const speak = useCallback((text: string) => {
+    const synth = synthRef.current;
+    if (!synth || !voiceOn) return;
+    synth.cancel();
+    if (!synth) return;
+
+    const cfg = VOICE_CONFIG[personaId] ?? VOICE_CONFIG.alex;
+    const clean = stripMarkdown(text);
+    if (!clean.trim()) return;
+
+    const chunks = clean.match(/.{1,200}(?:\s|$)/g) ?? [clean];
+
+    let idx = 0;
+    setSpeaking(true);
+
+    function speakNext() {
+      if (!synth || idx >= chunks.length) { setSpeaking(false); return; }
+      const utt = new SpeechSynthesisUtterance(chunks[idx++]);
+      utt.pitch = cfg.pitch;
+      utt.rate  = cfg.rate;
+      utt.lang  = "en-US";
+
+      const voices = synth.getVoices();
+      const preferred = voices.find(v =>
+        v.lang.startsWith("en") &&
+        v.name.toLowerCase().includes(cfg.gender === "female" ? "female" : "male")
+      ) ?? voices.find(v =>
+        v.lang.startsWith("en") &&
+        (cfg.gender === "female"
+          ? v.name.toLowerCase().match(/zira|hazel|samantha|victoria|karen|moira/)
+          : v.name.toLowerCase().match(/david|mark|daniel|alex|james|thomas/))
+      ) ?? voices.find(v => v.lang.startsWith("en")) ?? voices[0];
+
+      if (preferred) utt.voice = preferred;
+      utt.onend = speakNext;
+      utt.onerror = () => setSpeaking(false);
+      synth.speak(utt);
+    }
+
+    speakNext();
+  }, [voiceOn, personaId]);
+
+  const stop = useCallback(() => {
+    synthRef.current?.cancel();
+    setSpeaking(false);
+  }, []);
+
+  return { voiceOn, setVoiceOn, speaking, speak, stop };
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -232,6 +316,7 @@ export default function MentorChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activePersona = PERSONAS.find(p => p.id === personaId) ?? PERSONAS[0];
+  const { voiceOn, setVoiceOn, speaking, speak, stop } = useSpeech(personaId);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -300,6 +385,7 @@ export default function MentorChat({
           { role: "assistant", content: accumulated, createdAt: new Date() },
         ]);
         setStreamingContent("");
+        speak(accumulated);
       } catch (err) {
         console.error("Chat error:", err);
         const msg = err instanceof Error ? err.message : "Unknown error";
@@ -405,7 +491,7 @@ export default function MentorChat({
             {PERSONAS.map(p => (
               <button
                 key={p.id}
-                onClick={() => setPersonaId(p.id)}
+                onClick={() => { stop(); setPersonaId(p.id); }}
                 className="w-full text-left rounded-xl px-3 py-2.5 transition-all flex items-center gap-3 border"
                 style={personaId === p.id
                   ? { background: p.bgGradient, borderColor: p.borderColor }
@@ -456,6 +542,28 @@ export default function MentorChat({
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {speaking && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                style={{ background: activePersona.borderColor + "22", color: activePersona.tagColor }}>
+                <span className="flex gap-0.5">
+                  {[0,1,2,3].map(i => (
+                    <span key={i} className="w-0.5 rounded-full animate-bounce"
+                      style={{ height: `${8 + i * 3}px`, background: activePersona.tagColor, animationDelay: `${i * 0.1}s` }} />
+                  ))}
+                </span>
+                Speaking…
+              </div>
+            )}
+            <button
+              onClick={() => { if (speaking) stop(); else setVoiceOn(v => !v); }}
+              title={voiceOn ? "Voice on — click to mute" : "Voice off — click to enable"}
+              className="p-2 rounded-lg transition-colors"
+              style={voiceOn
+                ? { background: activePersona.borderColor + "22", color: activePersona.tagColor }
+                : { background: "#f1f5f9", color: "#94a3b8" }}
+            >
+              {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs font-medium text-slate-600">Online</span>
           </div>
