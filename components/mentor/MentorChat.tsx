@@ -439,15 +439,28 @@ export default function MentorChat({
                   className="text-left rounded-2xl p-5 border-2 transition-all hover:scale-[1.02] hover:shadow-xl"
                   style={{ background: p.bgGradient, borderColor: p.borderColor }}
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <PersonaAvatar persona={p} size={48} />
-                    <div>
-                      <p className="font-black text-slate-900 text-base">{p.name}</p>
-                      <p className="text-xs font-semibold" style={{ color: p.tagColor }}>{p.title} @ {p.company}</p>
+                  {/* Big face */}
+                  <div className="flex justify-center mb-4">
+                    <div style={{
+                      width: 96, height: 96, borderRadius: 48,
+                      background: p.bgGradient,
+                      border: `3px solid ${p.borderColor}`,
+                      overflow: "hidden",
+                      boxShadow: `0 8px 24px ${p.borderColor}44`,
+                    }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.avatarUrl} alt={p.name} width={96} height={96} style={{ width: "100%", height: "100%" }} />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 mb-2"><span className="font-bold">Specialty:</span> {p.specialty}</p>
-                  <p className="text-xs text-slate-500 italic">"{p.catchphrase}"</p>
+                  <div className="text-center mb-3">
+                    <p className="font-black text-slate-900 text-lg">{p.name}</p>
+                    <p className="text-xs font-bold mt-0.5" style={{ color: p.tagColor }}>{p.title}</p>
+                    <p className="text-xs font-semibold text-slate-500">{p.company}</p>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-xs text-slate-600"><span className="font-bold">Specialty:</span> {p.specialty}</p>
+                    <p className="text-xs text-slate-400 italic">"{p.catchphrase}"</p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -498,7 +511,7 @@ export default function MentorChat({
                   : { background: "transparent", borderColor: "transparent" }
                 }
               >
-                <PersonaAvatar persona={p} size={34} />
+                <PersonaAvatar persona={p} size={40} />
                 <div className="flex-1 min-w-0">
                   <p className={cn("text-sm font-bold truncate", personaId === p.id ? "text-slate-900" : "text-slate-300")}>{p.name}</p>
                   <p className="text-xs truncate" style={{ color: personaId === p.id ? p.tagColor : "#64748b" }}>{p.company} · {p.specialty}</p>
@@ -574,7 +587,7 @@ export default function MentorChat({
           {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full text-center pb-10">
               <div className="mb-4">
-                <PersonaAvatar persona={activePersona} size={72} />
+                <PersonaAvatar persona={activePersona} size={96} />
               </div>
               <h2 className="text-white font-black text-xl mb-2">
                 Hi {userName}, I&apos;m {activePersona.name}
