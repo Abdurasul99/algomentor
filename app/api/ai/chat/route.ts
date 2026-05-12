@@ -3,6 +3,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { aiStream, type ChatMessage } from "@/lib/ai";
 import { NextRequest, NextResponse } from "next/server";
+import { getPersona } from "@/lib/personas";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +11,8 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = (session.user as { id: string }).id;
 
-    const { message } = await req.json() as { message: string };
+    const body = await req.json() as { message: string; personaId?: string };
+    const { message, personaId = "alex" } = body;
     if (!message?.trim()) return NextResponse.json({ error: "Message required" }, { status: 400 });
 
     // Load context in parallel
@@ -45,25 +47,20 @@ export async function POST(req: NextRequest) {
     const weak = progress.filter((p) => p.masteryScore < 50 && p.status !== "NotStarted").map((p) => p.module.name).join(", ") || "none yet";
     const strong = progress.filter((p) => p.masteryScore > 70).map((p) => p.module.name).join(", ") || "none yet";
 
-    const systemPrompt = `You are an expert algorithm and data structures mentor for ${user.name}. Help them get a job at ${companies}.
-
-STUDENT DATA:
-• Experience: ${user.experienceLevel}
-• LeetCode: ${leetcode?.totalSolved ?? 0} solved (${leetcode?.easySolved ?? 0}E / ${leetcode?.mediumSolved ?? 0}M / ${leetcode?.hardSolved ?? 0}H), contest rating: ${leetcode?.contestRating ?? "N/A"}
-
-MODULE PROGRESS:
-${progressLines}
-Weak areas: ${weak}
-Strong areas: ${strong}
-
-YOUR RULES:
-1. Always reference their specific data — never be generic
-2. For problems, use real FAANG interview style with examples and constraints
-3. For concepts, start with a simple analogy, then go deeper
-4. Use Socratic method — guide with questions, don't just give answers
-5. Format all code in triple backticks with language label
-6. Be encouraging but brutally honest about gaps
-7. Responses should be focused and actionable, not long and fluffy`;
+    const persona = getPersona(personaId);
+    const systemPrompt = persona.buildSystemPrompt({
+      userName: user.name ?? "Student",
+      experienceLevel: user.experienceLevel ?? "beginner",
+      totalSolved: leetcode?.totalSolved ?? 0,
+      easySolved: leetcode?.easySolved ?? 0,
+      mediumSolved: leetcode?.mediumSolved ?? 0,
+      hardSolved: leetcode?.hardSolved ?? 0,
+      contestRating: Math.round(leetcode?.contestRating ?? 0),
+      weakModules: weak.split(", ").filter(Boolean),
+      strongModules: strong.split(", ").filter(Boolean),
+      targetCompanies: companies,
+      progressLines,
+    });
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },

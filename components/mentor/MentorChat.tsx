@@ -1,19 +1,11 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import {
-  Brain,
-  Send,
-  Zap,
-  User,
-  BookOpen,
-  Code2,
-  Target,
-  TrendingUp,
-  MessageSquare,
-} from "lucide-react";
+import { Send, User, Zap, BookOpen, Code2, Target, TrendingUp, MessageSquare, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { PERSONAS } from "@/lib/personas";
+import type { Persona } from "@/lib/personas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -203,6 +195,25 @@ function TypingDots() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// ─── Persona Avatar ───────────────────────────────────────────────────────────
+
+function PersonaAvatar({ persona, size = 32 }: { persona: Persona; size?: number }) {
+  const initials = persona.name.split(" ").map(w => w[0]).join("");
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size / 2,
+      background: persona.bgGradient,
+      border: `2px solid ${persona.borderColor}`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: size * 0.35, fontWeight: 800, color: persona.tagColor, fontFamily: "monospace" }}>
+        {initials}
+      </span>
+    </div>
+  );
+}
+
 export default function MentorChat({
   initialMessages,
   userName,
@@ -212,8 +223,11 @@ export default function MentorChat({
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [personaId, setPersonaId] = useState("alex");
+  const [showPersonaModal, setShowPersonaModal] = useState(messages.length === 0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activePersona = PERSONAS.find(p => p.id === personaId) ?? PERSONAS[0];
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -243,7 +257,7 @@ export default function MentorChat({
         const response = await fetch("/api/ai/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmed }),
+          body: JSON.stringify({ message: trimmed, personaId }),
         });
 
         // Handle non-OK responses (auth errors, server errors)
@@ -317,8 +331,40 @@ export default function MentorChat({
   };
 
   return (
-    // Override the default `p-6` padding from the app shell main wrapper
     <div className="-m-6 flex h-[calc(100vh-4rem)] bg-slate-900 overflow-hidden">
+
+      {/* ── Persona select modal (shown on first load) ──────────────────── */}
+      {showPersonaModal && (
+        <div className="absolute inset-0 z-50 bg-slate-900/95 flex items-center justify-center p-6">
+          <div className="w-full max-w-2xl">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-black text-white mb-2">Choose Your Mentor</h2>
+              <p className="text-slate-400 text-sm">Each mentor has a unique style, personality, and specialty. You can switch anytime.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {PERSONAS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setPersonaId(p.id); setShowPersonaModal(false); }}
+                  className="text-left rounded-2xl p-5 border-2 transition-all hover:scale-[1.02] hover:shadow-xl"
+                  style={{ background: p.bgGradient, borderColor: p.borderColor }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <PersonaAvatar persona={p} size={48} />
+                    <div>
+                      <p className="font-black text-slate-900 text-base">{p.name}</p>
+                      <p className="text-xs font-semibold" style={{ color: p.tagColor }}>{p.title} @ {p.company}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 mb-2"><span className="font-bold">Specialty:</span> {p.specialty}</p>
+                  <p className="text-xs text-slate-500 italic">"{p.catchphrase}"</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Left sidebar ─────────────────────────────────────────────────── */}
       <aside className="w-72 shrink-0 bg-slate-800 border-r border-slate-700 flex flex-col overflow-y-auto">
         {/* Profile card */}
@@ -332,63 +378,61 @@ export default function MentorChat({
               <p className="text-slate-400 text-xs">{userContext.experienceLevel}</p>
             </div>
           </div>
-
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-slate-700 rounded-lg p-2 text-center">
-              <p className="text-indigo-400 font-bold text-lg leading-none">
-                {userContext.totalSolved}
-              </p>
+              <p className="text-indigo-400 font-bold text-lg leading-none">{userContext.totalSolved}</p>
               <p className="text-slate-400 text-xs mt-0.5">Solved</p>
             </div>
             <div className="bg-slate-700 rounded-lg p-2 text-center">
-              <p className="text-green-400 font-bold text-lg leading-none">
-                {userContext.strongModules.length}
-              </p>
+              <p className="text-green-400 font-bold text-lg leading-none">{userContext.strongModules.length}</p>
               <p className="text-slate-400 text-xs mt-0.5">Strong</p>
             </div>
             <div className="bg-slate-700 rounded-lg p-2 text-center">
-              <p className="text-amber-400 font-bold text-lg leading-none">
-                {userContext.weakModules.length}
-              </p>
+              <p className="text-amber-400 font-bold text-lg leading-none">{userContext.weakModules.length}</p>
               <p className="text-slate-400 text-xs mt-0.5">Weak</p>
             </div>
           </div>
+        </div>
 
-          {userContext.weakModules.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs text-slate-400 mb-1.5 font-medium">Focus areas</p>
-              <div className="flex flex-wrap gap-1">
-                {userContext.weakModules.slice(0, 3).map((m) => (
-                  <span
-                    key={m}
-                    className="text-xs bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded-full"
-                  >
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Mentor selector */}
+        <div className="p-4 border-b border-slate-700">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your Mentor</p>
+          <div className="space-y-2">
+            {PERSONAS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setPersonaId(p.id)}
+                className="w-full text-left rounded-xl px-3 py-2.5 transition-all flex items-center gap-3 border"
+                style={personaId === p.id
+                  ? { background: p.bgGradient, borderColor: p.borderColor }
+                  : { background: "transparent", borderColor: "transparent" }
+                }
+              >
+                <PersonaAvatar persona={p} size={34} />
+                <div className="flex-1 min-w-0">
+                  <p className={cn("text-sm font-bold truncate", personaId === p.id ? "text-slate-900" : "text-slate-300")}>{p.name}</p>
+                  <p className="text-xs truncate" style={{ color: personaId === p.id ? p.tagColor : "#64748b" }}>{p.company} · {p.specialty}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Quick prompts */}
         <div className="p-4 flex-1">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Quick Prompts
-          </p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Quick Prompts</p>
           <div className="space-y-1.5">
-            {QUICK_PROMPTS.map((qp) => (
+            {activePersona.quickPrompts.map((text) => (
               <button
-                key={qp.label}
-                onClick={() => sendMessage(qp.text)}
+                key={text}
+                onClick={() => sendMessage(text)}
                 disabled={isStreaming}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-lg text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-all flex items-center gap-2 group",
+                  "w-full text-left px-3 py-2.5 rounded-lg text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-all",
                   isStreaming && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <qp.icon className="w-3.5 h-3.5 text-indigo-400 shrink-0 group-hover:text-indigo-300" />
-                <span className="leading-snug">{qp.label}</span>
+                <span className="leading-snug">{text}</span>
               </button>
             ))}
           </div>
@@ -398,17 +442,18 @@ export default function MentorChat({
       {/* ── Main chat area ────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="h-14 bg-slate-800 border-b border-slate-700 flex items-center px-5 gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-white" />
-          </div>
+        <div className="h-16 border-b border-slate-700 flex items-center px-5 gap-3 shrink-0"
+          style={{ background: activePersona.bgGradient }}>
+          <PersonaAvatar persona={activePersona} size={38} />
           <div>
-            <p className="text-white font-semibold text-sm">AI Mentor</p>
-            <p className="text-xs text-slate-400">Personalized to your progress</p>
+            <p className="font-black text-slate-900 text-sm">{activePersona.name}</p>
+            <p className="text-xs font-semibold" style={{ color: activePersona.tagColor }}>
+              {activePersona.title} @ {activePersona.company} · {activePersona.specialty}
+            </p>
           </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-xs text-green-400 font-medium">Online</span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs font-medium text-slate-600">Online</span>
           </div>
         </div>
 
@@ -416,29 +461,32 @@ export default function MentorChat({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full text-center pb-10">
-              <div className="w-16 h-16 rounded-full bg-indigo-900/50 flex items-center justify-center mb-4">
-                <Brain className="w-8 h-8 text-indigo-400" />
+              <div className="mb-4">
+                <PersonaAvatar persona={activePersona} size={72} />
               </div>
-              <h2 className="text-white font-bold text-xl mb-2">
-                Hi {userName}, I&apos;m your AI Mentor
+              <h2 className="text-white font-black text-xl mb-2">
+                Hi {userName}, I&apos;m {activePersona.name}
               </h2>
-              <p className="text-slate-400 text-sm max-w-md">
-                I know your progress, your weak areas, and your goals. Ask me
-                anything about algorithms, request a problem, or start a mock
-                interview.
+              <p className="text-slate-400 text-sm max-w-md mb-3">
+                {activePersona.title} @ {activePersona.company}
               </p>
+              <div className="inline-block px-4 py-2 rounded-xl border text-sm font-medium italic"
+                style={{ background: activePersona.bgGradient, borderColor: activePersona.borderColor, color: activePersona.tagColor }}>
+                "{activePersona.catchphrase}"
+              </div>
+              <p className="text-slate-500 text-xs mt-4">Ask me anything or pick a quick prompt →</p>
             </div>
           )}
 
           {messages.map((msg, idx) => (
-            <MessageBubble key={idx} message={msg} />
+            <MessageBubble key={idx} message={msg} persona={activePersona} />
           ))}
 
           {/* Streaming message */}
           {isStreaming && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
-                <Brain className="w-4 h-4 text-white" />
+              <div className="mt-0.5">
+                <PersonaAvatar persona={activePersona} size={32} />
               </div>
               <div className="max-w-[75%] bg-white rounded-2xl rounded-tl-sm shadow-sm border border-slate-200 px-4 py-3">
                 {streamingContent ? (
@@ -500,7 +548,7 @@ export default function MentorChat({
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, persona }: { message: ChatMessage; persona: Persona }) {
   const isUser = message.role === "user";
 
   const timeString = (() => {
@@ -530,8 +578,8 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
-        <Brain className="w-4 h-4 text-white" />
+      <div className="mt-0.5">
+        <PersonaAvatar persona={persona} size={32} />
       </div>
       <div className="max-w-[75%]">
         <div className="bg-white rounded-2xl rounded-tl-sm shadow-sm border border-slate-200 px-4 py-3">
