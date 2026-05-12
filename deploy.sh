@@ -39,6 +39,11 @@ ssh -i "$KEY" -o StrictHostKeyChecking=no ubuntu@$EC2 "
   # Restore DB (tar excluded it, but just in case)
   [ -f ${DB_PATH}.bak ] && [ ! -s $DB_PATH ] && cp ${DB_PATH}.bak $DB_PATH
 
+  # Always enforce absolute DATABASE_URL (never let deploy overwrite it)
+  grep -v '^DATABASE_URL' $APP_DIR/.env > /tmp/env_deploy
+  echo 'DATABASE_URL="file:/var/www/algomentor/prisma/dev.db"' >> /tmp/env_deploy
+  cp /tmp/env_deploy $APP_DIR/.env
+
   npm install --production=false 2>&1 | tail -3
 
   DATABASE_URL='file:$DB_PATH' npx prisma generate 2>&1 | tail -2
