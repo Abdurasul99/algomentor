@@ -8,6 +8,7 @@ export interface Persona {
   borderColor: string;
   tagColor: string;
   emoji: string;
+  avatarUrl: string;
   specialty: string;
   style: string;
   catchphrase: string;
@@ -40,6 +41,7 @@ export const PERSONAS: Persona[] = [
     borderColor: "#4285F4",
     tagColor: "#1a73e8",
     emoji: "🔵",
+    avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=AlexChen&backgroundColor=b6e3f4&clothingColor=3c4f5c&facialHair=beardMedium&facialHairColor=2c1b18&hair=shortHairShortFlat&hairColor=2c1b18&skin=light",
     specialty: "Algorithms & Complexity",
     style: "Socratic, precise, loves edge cases",
     catchphrase: "What's the time complexity of that?",
@@ -79,6 +81,7 @@ YOUR PERSONALITY:
     borderColor: "#0081FB",
     tagColor: "#0064d2",
     emoji: "🟦",
+    avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=SarahKim&backgroundColor=ffd5dc&hair=longHairStraight&hairColor=090806&skin=yellow&clothing=blazerShirt&clothingColor=ff488e",
     specialty: "System Design & Behavioral",
     style: "Warm but demanding, big-picture thinker",
     catchphrase: "Now scale that to a billion users.",
@@ -119,6 +122,7 @@ YOUR PERSONALITY:
     borderColor: "#FF9900",
     tagColor: "#c77b00",
     emoji: "🟠",
+    avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=MarcusWebb&backgroundColor=ffdfbf&skin=tanned&facialHair=beardLight&facialHairColor=724133&hair=shortHairDreads01&hairColor=4a312c&clothing=blazerSweater&clothingColor=262e33",
     specialty: "Leadership Principles & Hard Problems",
     style: "Tough, LP-obsessed, high standards",
     catchphrase: "Would you bet your team's roadmap on that?",
@@ -158,6 +162,7 @@ YOUR PERSONALITY:
     borderColor: "#00A4EF",
     tagColor: "#0078d4",
     emoji: "🔷",
+    avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=PriyaNair&backgroundColor=d1f4e0&skin=brown&hair=longHairBun&hairColor=090806&clothing=blazerShirt&clothingColor=0f4c81",
     specialty: "Architecture & Deep Fundamentals",
     style: "Methodical, structured, first-principles thinker",
     catchphrase: "Let's start from first principles.",

@@ -198,18 +198,22 @@ function TypingDots() {
 // ─── Persona Avatar ───────────────────────────────────────────────────────────
 
 function PersonaAvatar({ persona, size = 32 }: { persona: Persona; size?: number }) {
-  const initials = persona.name.split(" ").map(w => w[0]).join("");
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2,
       background: persona.bgGradient,
-      border: `2px solid ${persona.borderColor}`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0,
+      border: `2.5px solid ${persona.borderColor}`,
+      flexShrink: 0, overflow: "hidden",
+      boxShadow: `0 0 0 2px white, 0 0 0 3px ${persona.borderColor}33`,
     }}>
-      <span style={{ fontSize: size * 0.35, fontWeight: 800, color: persona.tagColor, fontFamily: "monospace" }}>
-        {initials}
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={persona.avatarUrl}
+        alt={persona.name}
+        width={size}
+        height={size}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+      />
     </div>
   );
 }
