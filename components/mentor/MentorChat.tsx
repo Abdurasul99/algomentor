@@ -585,21 +585,41 @@ export default function MentorChat({
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {messages.length === 0 && !isStreaming && (
-            <div className="flex flex-col items-center justify-center h-full text-center pb-10">
-              <div className="mb-4">
-                <PersonaAvatar persona={activePersona} size={96} />
+            <div className="flex flex-col items-center justify-center h-full pb-6">
+              {/* Big persona card */}
+              <div className="rounded-2xl overflow-hidden shadow-2xl w-72" style={{ border: `2px solid ${activePersona.borderColor}` }}>
+                {/* Face — big */}
+                <div className="relative flex justify-center items-center py-6" style={{ background: activePersona.bgGradient }}>
+                  <div style={{
+                    width: 160, height: 160, borderRadius: 80,
+                    border: `4px solid ${activePersona.borderColor}`,
+                    overflow: "hidden",
+                    boxShadow: `0 12px 40px ${activePersona.borderColor}55`,
+                  }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={activePersona.avatarUrl} alt={activePersona.name}
+                      width={160} height={160} style={{ width: "100%", height: "100%" }} />
+                  </div>
+                  {/* Online badge */}
+                  <div className="absolute bottom-5 right-[72px] w-5 h-5 bg-green-400 rounded-full border-2 border-white" />
+                </div>
+
+                {/* Info */}
+                <div className="bg-slate-800 px-5 py-4 text-center">
+                  <h2 className="text-white font-black text-lg">{activePersona.name}</h2>
+                  <p className="text-xs font-bold mt-0.5" style={{ color: activePersona.companyColor }}>
+                    {activePersona.company}
+                  </p>
+                  <p className="text-slate-400 text-xs mt-0.5">{activePersona.title}</p>
+                  <div className="mt-3 px-3 py-2 rounded-xl text-xs font-medium italic text-center"
+                    style={{ background: activePersona.bgGradient, color: activePersona.tagColor }}>
+                    "{activePersona.catchphrase}"
+                  </div>
+                  <p className="text-slate-500 text-xs mt-3">
+                    Hi <span className="text-white font-semibold">{userName}</span> — ask me anything or pick a prompt
+                  </p>
+                </div>
               </div>
-              <h2 className="text-white font-black text-xl mb-2">
-                Hi {userName}, I&apos;m {activePersona.name}
-              </h2>
-              <p className="text-slate-400 text-sm max-w-md mb-3">
-                {activePersona.title} @ {activePersona.company}
-              </p>
-              <div className="inline-block px-4 py-2 rounded-xl border text-sm font-medium italic"
-                style={{ background: activePersona.bgGradient, borderColor: activePersona.borderColor, color: activePersona.tagColor }}>
-                "{activePersona.catchphrase}"
-              </div>
-              <p className="text-slate-500 text-xs mt-4">Ask me anything or pick a quick prompt →</p>
             </div>
           )}
 
