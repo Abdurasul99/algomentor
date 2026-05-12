@@ -548,19 +548,90 @@ export default function MentorChat({
         </div>
       </aside>
 
-      {/* ── Video panel ──────────────────────────────────────────────────── */}
-      {videoOn && (
-        <div className="w-64 shrink-0 bg-slate-900 border-l border-slate-700 flex flex-col items-center justify-center p-4 gap-4">
-          <VideoMentor
-            persona={activePersona}
-            textToSpeak={lastSpoken}
-            onClose={() => setVideoOn(false)}
-          />
-          <p className="text-xs text-slate-500 text-center">
-            Powered by D-ID · Talking face
-          </p>
-        </div>
-      )}
+      {/* ── Face / Video panel (always visible on desktop) ──────────────── */}
+      <div className="hidden lg:flex w-72 shrink-0 flex-col border-l border-slate-700 bg-slate-900">
+        {videoOn ? (
+          <div className="flex flex-col items-center justify-center flex-1 p-4 gap-3">
+            <VideoMentor
+              persona={activePersona}
+              textToSpeak={lastSpoken}
+              onClose={() => setVideoOn(false)}
+            />
+            <p className="text-xs text-slate-600 text-center">Powered by D-ID</p>
+          </div>
+        ) : (
+          /* Static face card */
+          <div className="flex flex-col items-center justify-center flex-1 p-5 gap-4">
+            {/* Big photo */}
+            <div style={{
+              width: 200, height: 200, borderRadius: 100,
+              overflow: "hidden",
+              border: `4px solid ${activePersona.borderColor}`,
+              boxShadow: `0 0 0 6px ${activePersona.borderColor}22, 0 16px 48px ${activePersona.borderColor}44`,
+              flexShrink: 0,
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activePersona.avatarUrl}
+                alt={activePersona.name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+
+            {/* Name & status */}
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs font-bold text-green-400">Online</span>
+              </div>
+              <h3 className="text-white font-black text-lg">{activePersona.name}</h3>
+              <p className="text-xs font-bold mt-0.5" style={{ color: activePersona.companyColor }}>
+                {activePersona.company}
+              </p>
+              <p className="text-slate-400 text-xs mt-0.5">{activePersona.title}</p>
+            </div>
+
+            {/* Catchphrase */}
+            <div className="px-4 py-3 rounded-xl text-xs italic text-center w-full"
+              style={{ background: activePersona.bgGradient, color: activePersona.tagColor, border: `1px solid ${activePersona.borderColor}44` }}>
+              "{activePersona.catchphrase}"
+            </div>
+
+            {/* Speaking indicator */}
+            {speaking && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-full"
+                style={{ background: activePersona.borderColor + "22" }}>
+                <div className="flex gap-0.5 items-end h-4">
+                  {[3,5,7,5,3].map((h, i) => (
+                    <div key={i} className="w-1 rounded-full animate-bounce"
+                      style={{
+                        height: h * 2,
+                        background: activePersona.companyColor,
+                        animationDelay: `${i * 0.1}s`,
+                      }} />
+                  ))}
+                </div>
+                <span className="text-xs font-bold" style={{ color: activePersona.tagColor }}>Speaking…</span>
+              </div>
+            )}
+
+            {/* Video call button */}
+            <button
+              onClick={() => setVideoOn(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:opacity-90 active:scale-95"
+              style={{
+                background: `linear-gradient(135deg, ${activePersona.borderColor}, ${activePersona.companyColor})`,
+                color: "white",
+                boxShadow: `0 4px 14px ${activePersona.borderColor}44`,
+              }}
+            >
+              <Video className="w-4 h-4" />
+              Start Video Call
+            </button>
+            <p className="text-xs text-slate-600 text-center">Requires D-ID API key</p>
+          </div>
+        )}
+      </div>
 
       {/* ── Main chat area ────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
