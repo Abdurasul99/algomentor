@@ -130,7 +130,7 @@ export default function Sidebar() {
             <p className="text-xs font-semibold text-slate-300 truncate">{userName}</p>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: "/auth/login" })}
+            onClick={() => signOut({ callbackUrl: `${window.location.origin}/auth/login` })}
             className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-md transition-colors"
             title="Sign out"
           >
