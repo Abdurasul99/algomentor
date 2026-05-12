@@ -1,7 +1,10 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { Send, User, Volume2, VolumeX, Brain, Target, BookOpen, TrendingUp, Zap, MessageSquare, Code2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Send, User, Volume2, VolumeX, Video, VideoOff, Brain, Target, BookOpen, TrendingUp, Zap, MessageSquare, Code2 } from "lucide-react";
+
+const VideoMentor = dynamic(() => import("./VideoMentor"), { ssr: false });
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { PERSONAS } from "@/lib/personas";
@@ -317,6 +320,8 @@ export default function MentorChat({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activePersona = PERSONAS.find(p => p.id === personaId) ?? PERSONAS[0];
   const { voiceOn, setVoiceOn, speaking, speak, stop } = useSpeech(personaId);
+  const [videoOn, setVideoOn]     = useState(false);
+  const [lastSpoken, setLastSpoken] = useState<string | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -386,6 +391,7 @@ export default function MentorChat({
         ]);
         setStreamingContent("");
         speak(accumulated);
+        setLastSpoken(accumulated);
       } catch (err) {
         console.error("Chat error:", err);
         const msg = err instanceof Error ? err.message : "Unknown error";
@@ -542,6 +548,20 @@ export default function MentorChat({
         </div>
       </aside>
 
+      {/* ── Video panel ──────────────────────────────────────────────────── */}
+      {videoOn && (
+        <div className="w-64 shrink-0 bg-slate-900 border-l border-slate-700 flex flex-col items-center justify-center p-4 gap-4">
+          <VideoMentor
+            persona={activePersona}
+            textToSpeak={lastSpoken}
+            onClose={() => setVideoOn(false)}
+          />
+          <p className="text-xs text-slate-500 text-center">
+            Powered by D-ID · Talking face
+          </p>
+        </div>
+      )}
+
       {/* ── Main chat area ────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -569,13 +589,25 @@ export default function MentorChat({
             )}
             <button
               onClick={() => { if (speaking) stop(); else setVoiceOn(v => !v); }}
-              title={voiceOn ? "Voice on — click to mute" : "Voice off — click to enable"}
+              title={voiceOn ? "Voice on" : "Voice off"}
               className="p-2 rounded-lg transition-colors"
               style={voiceOn
                 ? { background: activePersona.borderColor + "22", color: activePersona.tagColor }
-                : { background: "#f1f5f9", color: "#94a3b8" }}
+                : { background: "rgba(255,255,255,0.07)", color: "#64748b" }}
             >
               {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={() => setVideoOn(v => !v)}
+              title={videoOn ? "End video call" : "Start video call"}
+              className="p-2 rounded-lg transition-colors flex items-center gap-1.5"
+              style={videoOn
+                ? { background: "#ef444422", color: "#ef4444" }
+                : { background: activePersona.borderColor + "22", color: activePersona.tagColor }}
+            >
+              {videoOn ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{videoOn ? "End" : "Video"}</span>
             </button>
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs font-medium text-slate-600">Online</span>
